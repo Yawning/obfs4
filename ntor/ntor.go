@@ -289,9 +289,6 @@ func NewKeypair(elligator bool) (*Keypair, error) {
 	}
 }
 
-// LoadKeypair takes an existing Curve25519 private key from a buffer and
-// creates a Keypair including the public key.
-
 // KeypairFromBase64 returns a Keypair from a Base64 representation of the
 // private key.
 func KeypairFromBase64(encoded string) (*Keypair, error) {
