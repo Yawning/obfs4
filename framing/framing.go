@@ -35,7 +35,7 @@
 //
 // The frame format is:
 //   uint16_t length (obfsucated, big endian)
-//   NaCl SecretBox (Poly1305/Salsa20) containing:
+//   NaCl SecretBox (Poly1305/XSalsa20) containing:
 //     uint8_t[16] tag (Part of the SecretBox construct)
 //     uint8_t[]   payload
 //
@@ -43,7 +43,7 @@
 // SipHash-2-4 digest of the previous SecretBox concatenated with the nonce
 // used to seal the current SecretBox.
 //
-// The NaCl SecretBox (Poly1305/Salsa20) nonce format is:
+// The NaCl SecretBox (Poly1305/XSalsa20) nonce format is:
 //     uint8_t[24] prefix (Fixed)
 //     uint64_t    counter (Big endian)
 //
