@@ -81,11 +81,21 @@ func copyLoop(a, b net.Conn) {
 
 	// XXX: Log/propagate errors.
 	go func() {
-		io.Copy(b, a)
+		_, err := io.Copy(b, a)
+		if err != nil {
+			b.Close()
+			a.Close()
+			log.Printf("[WARN] Connection closed: %s", err)
+		}
 		wg.Done()
 	}()
 	go func() {
-		io.Copy(a, b)
+		_, err := io.Copy(a, b)
+		if err != nil {
+			a.Close()
+			b.Close()
+			log.Printf("[WARN] Connection closed: %s", err)
+		}
 		wg.Done()
 	}()
 
@@ -115,7 +125,7 @@ func serverHandler(conn net.Conn, info *pt.ServerInfo) error {
 	}
 	defer or.Close()
 
-	copyLoop(conn, or)
+	copyLoop(or, conn)
 
 	return nil
 }
