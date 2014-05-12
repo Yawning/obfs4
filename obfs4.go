@@ -40,6 +40,11 @@ import (
 
 const (
 	defaultReadSize = framing.MaximumSegmentLength
+
+	minCloseThreshold = framing.MaximumSegmentLength
+	maxCloseThreshold = framing.MaximumSegmentLength * 5
+	minCloseInterval  = 0
+	maxCloseInterval  = 60
 )
 
 // Obfs4Conn is the implementation of the net.Conn interface for obfs4
@@ -53,7 +58,7 @@ type Obfs4Conn struct {
 	receiveBuffer        bytes.Buffer
 	receiveDecodedBuffer bytes.Buffer
 
-	isOk bool
+	isOk     bool
 	isServer bool
 
 	// Server side state.
@@ -61,12 +66,32 @@ type Obfs4Conn struct {
 }
 
 func (c *Obfs4Conn) closeAfterDelay() {
-	// I-it's not like I w-wanna handshake with or anything.  B-b-baka!
+	// I-it's not like I w-wanna handshake with you or anything.  B-b-baka!
+	defer c.conn.Close()
 
-	// XXX: Consume and immediately discard data of the network for a random
-	// period of time.
+	delaySecs, err := randRange(minCloseInterval, maxCloseInterval)
+	if err != nil {
+		return
+	}
+	toDiscard, err := randRange(minCloseThreshold, maxCloseThreshold)
+	if err != nil {
+		return
+	}
 
-	c.conn.Close();
+	delay := time.Duration(delaySecs) * time.Second
+	err = c.conn.SetReadDeadline(time.Now().Add(delay))
+
+	// Consume and discard data on this connection until either the specified
+	// interval passes or a certain size has been reached.
+	discarded := 0
+	buf := make([]byte, defaultReadSize)
+	for discarded < int(toDiscard) {
+		n, err := c.conn.Read(buf)
+		if err != nil {
+			return
+		}
+		discarded += n
+	}
 }
 
 func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicKey) error {
@@ -175,7 +200,7 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 func (c *Obfs4Conn) ServerHandshake() error {
 	// Handshakes when already established are a no-op.
 	if c.isOk {
-		return nil;
+		return nil
 	}
 
 	// Clients handshake as part of Dial.
@@ -291,7 +316,7 @@ func (c *Obfs4Conn) Close() error {
 		return syscall.EINVAL
 	}
 
-	c.isOk = false;
+	c.isOk = false
 
 	return c.conn.Close()
 }

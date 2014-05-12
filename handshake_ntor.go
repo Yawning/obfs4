@@ -36,7 +36,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"math/big"
 	"strconv"
 	"time"
 
@@ -365,16 +364,11 @@ func findMark(mark, buf []byte, startPos, maxPos int) int {
 }
 
 func makePad(min, max int64) ([]byte, error) {
-	if max < min {
-		panic(fmt.Sprintf("makePad: min > max (%d, %d)", min, max))
-	}
-
-	padRange := int64((max + 1) - min)
-	padLen, err := rand.Int(rand.Reader, big.NewInt(padRange))
+	padLen, err := randRange(min, max)
 	if err != nil {
 		return nil, err
 	}
-	pad := make([]byte, padLen.Int64()+min)
+	pad := make([]byte, padLen)
 	_, err = rand.Read(pad)
 	if err != nil {
 		return nil, err
