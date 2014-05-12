@@ -59,13 +59,13 @@ import (
 	"sync"
 	"syscall"
 
+	"git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/yawning/obfs4"
 	"github.com/yawning/obfs4/ntor"
-	"git.torproject.org/pluggable-transports/goptlib.git"
 )
 
 const (
-	obfs4Method = "obfs4"
+	obfs4Method  = "obfs4"
 	obfs4LogFile = "obfs4proxy.log"
 )
 
@@ -160,7 +160,7 @@ func serverSetup() bool {
 
 			// Initialize the listener.
 			ln, err := obfs4.Listen("tcp", bindaddr.Addr.String(), nodeID,
-									privateKey)
+				privateKey)
 			if err != nil {
 				pt.SmethodError(bindaddr.MethodName, err.Error())
 				break
