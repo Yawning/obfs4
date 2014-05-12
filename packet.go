@@ -54,7 +54,7 @@ func (e InvalidPacketLengthError) Error() string {
 	return fmt.Sprintf("packet: Invalid packet length: %d", int(e))
 }
 
-// InvalidPacketLengthError is the error returned when decodePacket rejects the
+// InvalidPayloadLengthError is the error returned when decodePacket rejects the
 // payload length.
 type InvalidPayloadLengthError int
 
