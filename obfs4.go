@@ -109,12 +109,16 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 	if err != nil {
 		return err
 	}
-	_, err = c.conn.Write(blob)
+
+	err = c.conn.SetDeadline(time.Now().Add(connectionTimeout * 2))
 	if err != nil {
 		return err
 	}
 
-	// XXX: Set the response timer.
+	_, err = c.conn.Write(blob)
+	if err != nil {
+		return err
+	}
 
 	// Consume the server handshake.
 	hsBuf := make([]byte, serverMaxHandshakeLength)
@@ -133,12 +137,16 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 		}
 		_ = c.receiveBuffer.Next(n)
 
+		err = c.conn.SetDeadline(time.Time{})
+		if err != nil {
+			return err
+		}
+
 		// Use the derived key material to intialize the link crypto.
 		okm := ntor.Kdf(seed, framing.KeyLength*2)
 		c.encoder = framing.NewEncoder(okm[:framing.KeyLength])
 		c.decoder = framing.NewDecoder(okm[framing.KeyLength:])
 
-		// XXX: Kill the response timer.
 		c.isOk = true
 
 		return nil
@@ -151,7 +159,7 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 	}
 
 	hs := newServerHandshake(nodeID, keypair)
-	err := c.conn.SetReadDeadline(time.Now().Add(connectionTimeout))
+	err := c.conn.SetDeadline(time.Now().Add(connectionTimeout))
 	if err != nil {
 		return err
 	}
@@ -172,10 +180,6 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 			return err
 		}
 		c.receiveBuffer.Reset()
-		err = c.conn.SetReadDeadline(time.Time{})
-		if err != nil {
-			return err
-		}
 
 		// Use the derived key material to intialize the link crypto.
 		okm := ntor.Kdf(seed, framing.KeyLength*2)
@@ -183,12 +187,6 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		c.decoder = framing.NewDecoder(okm[:framing.KeyLength])
 
 		break
-	}
-
-	// Ensure that writing the response completes quickly.
-	err = c.conn.SetWriteDeadline(time.Now().Add(connectionTimeout))
-	if err != nil {
-		return err
 	}
 
 	// Generate/send the response.
@@ -203,8 +201,7 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 
 	// TODO: Generate/send the PRNG seed.
 
-	// Disarm the write timer.
-	err = c.conn.SetWriteDeadline(time.Time{})
+	err = c.conn.SetDeadline(time.Time{})
 	if err != nil {
 		return err
 	}
