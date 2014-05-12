@@ -30,6 +30,7 @@ package obfs4
 
 import (
 	"bytes"
+	"log"
 	"net"
 	"syscall"
 	"time"
@@ -97,7 +98,7 @@ func (c *Obfs4Conn) closeAfterDelay() {
 
 func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicKey) error {
 	if c.isServer {
-		panic("clientHandshake() called for server connection")
+		log.Panicf("BUG: clientHandshake() called for server connection")
 	}
 
 	// Generate/send the client handshake.
@@ -155,7 +156,7 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 
 func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) error {
 	if !c.isServer {
-		panic("serverHandshake() called for client connection")
+		log.Panicf("BUG: serverHandshake() called for client connection")
 	}
 
 	hs := newServerHandshake(nodeID, keypair)
@@ -219,7 +220,7 @@ func (c *Obfs4Conn) ServerHandshake() error {
 
 	// Clients handshake as part of Dial.
 	if !c.isServer {
-		panic("ServerHandshake() called for client connection")
+		log.Panicf("BUG: ServerHandshake() called for client connection")
 	}
 
 	// Regardless of what happens, don't need the listener past returning from
@@ -263,12 +264,18 @@ func (c *Obfs4Conn) Read(b []byte) (int, error) {
 				break
 			} else if err != nil {
 				// Any other frame decoder errors are fatal.
+				c.isOk = false
 				return 0, err
 			}
 
-			// TODO: Support more than raw payload directly in NaCl boxes.
-
-			c.receiveDecodedBuffer.Write(frame)
+			// Decode the packet, if there is payload, it will be placed in
+			// receiveDecodedBuffer automatically.
+			err = c.decodePacket(frame)
+			if err != nil {
+				// All packet decoder errors are fatal.
+				c.isOk = false
+				return 0, err
+			}
 		}
 	}
 
@@ -278,7 +285,8 @@ func (c *Obfs4Conn) Read(b []byte) (int, error) {
 
 func (c *Obfs4Conn) Write(b []byte) (int, error) {
 	chopBuf := bytes.NewBuffer(b)
-	buf := make([]byte, framing.MaximumFramePayloadLength)
+	buf := make([]byte, maxPacketPayloadLength)
+	pkt := make([]byte, framing.MaximumFramePayloadLength)
 	nSent := 0
 	var frameBuf bytes.Buffer
 
@@ -286,25 +294,24 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 		// Send maximum sized frames.
 		n, err := chopBuf.Read(buf)
 		if err != nil {
+			c.isOk = false
 			return nSent, err
 		} else if n == 0 {
-			panic("Write(), chopping lenght was 0")
+			log.Panicf("BUG: Write(), chopping length was 0")
 		}
-
-		// Encode the frame.
-		_, frame, err := c.encoder.Encode(buf[:n])
-		if err != nil {
-			c.isOk = false
-			return nSent, err
-		}
-
-		_, err = frameBuf.Write(frame)
-		if err != nil {
-			c.isOk = false
-			return nSent, err
-		}
-
 		nSent += n
+
+		// Wrap the payload in a packet.
+		n = makePacket(pkt[:], packetTypePayload, buf[:n], 0)
+
+		// Encode the packet in an AEAD frame.
+		_, frame, err := c.encoder.Encode(pkt[:n])
+		if err != nil {
+			c.isOk = false
+			return nSent, err
+		}
+
+		frameBuf.Write(frame)
 	}
 
 	// TODO: Insert random padding.
@@ -316,7 +323,7 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 		// at this point.  It's possible to keep frameBuf around, but fuck it.
 		// Someone that wants write timeouts can change this.
 		c.isOk = false
-		return nSent, err
+		return nSent, err // XXX: nSent is a dirty lie here.
 	}
 
 	return nSent, nil

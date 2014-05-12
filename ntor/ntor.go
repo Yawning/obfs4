@@ -45,6 +45,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 
 	"code.google.com/p/go.crypto/curve25519"
 	"code.google.com/p/go.crypto/hkdf"
@@ -421,9 +422,9 @@ func Kdf(keySeed []byte, okmLen int) []byte {
 	okm := make([]byte, okmLen)
 	n, err := io.ReadFull(kdf, okm)
 	if err != nil {
-		panic(fmt.Sprintf("BUG: Failed HKDF: %s", err.Error()))
+		log.Panicf("BUG: Failed HKDF: %s", err.Error())
 	} else if n != len(okm) {
-		panic(fmt.Sprintf("BUG: Got truncated HKDF output: %d", n))
+		log.Panicf("BUG: Got truncated HKDF output: %d", n)
 	}
 
 	return okm

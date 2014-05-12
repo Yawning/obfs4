@@ -29,13 +29,13 @@ package obfs4
 
 import (
 	"crypto/rand"
-	"fmt"
+	"log"
 	"math/big"
 )
 
 func randRange(min, max int64) (int64, error) {
 	if max < min {
-		panic(fmt.Sprintf("randRange: min > max (%d, %d)", min, max))
+		log.Panicf("randRange: min > max (%d, %d)", min, max)
 	}
 
 	r := (max + 1) - min
