@@ -54,9 +54,26 @@ type Obfs4Conn struct {
 	receiveDecodedBuffer bytes.Buffer
 
 	isOk bool
+	isServer bool
+
+	// Server side state.
+	listener *Obfs4Listener
+}
+
+func (c *Obfs4Conn) closeAfterDelay() {
+	// I-it's not like I w-wanna handshake with or anything.  B-b-baka!
+
+	// XXX: Consume and immediately discard data of the network for a random
+	// period of time.
+
+	c.conn.Close();
 }
 
 func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicKey) error {
+	if c.isServer {
+		panic("clientHandshake() called for server connection")
+	}
+
 	// Generate/send the client handshake.
 	hs, err := newClientHandshake(nodeID, publicKey)
 	if err != nil {
@@ -103,6 +120,10 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 }
 
 func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) error {
+	if !c.isServer {
+		panic("serverHandshake() called for client connection")
+	}
+
 	hs := newServerHandshake(nodeID, keypair)
 
 	// XXX: Set the request timer.
@@ -144,9 +165,37 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		return err
 	}
 
+	// XXX: Generate/send the PRNG seed.
+
 	c.isOk = true
 
 	return nil
+}
+
+func (c *Obfs4Conn) ServerHandshake() error {
+	// Handshakes when already established are a no-op.
+	if c.isOk {
+		return nil;
+	}
+
+	// Clients handshake as part of Dial.
+	if !c.isServer {
+		panic("ServerHandshake() called for client connection")
+	}
+
+	// Regardless of what happens, don't need the listener past returning from
+	// this routine.
+	defer func() {
+		c.listener = nil
+	}()
+
+	// Complete the handshake.
+	err := c.serverHandshake(c.listener.nodeID, c.listener.keyPair)
+	if err != nil {
+		c.closeAfterDelay()
+	}
+
+	return err
 }
 
 func (c *Obfs4Conn) Read(b []byte) (int, error) {
@@ -242,6 +291,8 @@ func (c *Obfs4Conn) Close() error {
 		return syscall.EINVAL
 	}
 
+	c.isOk = false;
+
 	return c.conn.Close()
 }
 
@@ -313,29 +364,13 @@ func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
 	return c, nil
 }
 
-// Obfs4Listener a obfs4 network listener.  Clients should use variables of
+// Obfs4Listener a obfs4 network listener.  Servers should use variables of
 // type Listener instead of assuming obfs4.
 type Obfs4Listener struct {
 	listener net.Listener
 
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
-}
-
-type ListenerError struct {
-	err error
-}
-
-func (e *ListenerError) Error() string {
-	return e.err.Error()
-}
-
-func (e *ListenerError) Temporary() bool {
-	return true
-}
-
-func (e *ListenerError) Timeout() bool {
-	return false
 }
 
 func (l *Obfs4Listener) Accept() (net.Conn, error) {
@@ -348,14 +383,8 @@ func (l *Obfs4Listener) Accept() (net.Conn, error) {
 	// Allocate the obfs4 connection state.
 	cObfs := new(Obfs4Conn)
 	cObfs.conn = c
-
-	// Complete the handshake.
-	err = cObfs.serverHandshake(l.nodeID, l.keyPair)
-	if err != nil {
-		// XXX: Close after a delay.
-		c.Close()
-		return nil, &ListenerError{err}
-	}
+	cObfs.isServer = true
+	cObfs.listener = l
 
 	return cObfs, nil
 }

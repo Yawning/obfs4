@@ -1,5 +1,4 @@
 *.swp
 *~
 
-obfs4-client/obfs4-client
-obfs4-server/obfs4-server
+obfs4proxy/obfs4proxy
