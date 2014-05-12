@@ -39,7 +39,8 @@ import (
 )
 
 const (
-	defaultReadSize = framing.MaximumSegmentLength
+	defaultReadSize   = framing.MaximumSegmentLength
+	connectionTimeout = time.Duration(15) * time.Second
 
 	minCloseThreshold = framing.MaximumSegmentLength
 	maxCloseThreshold = framing.MaximumSegmentLength * 5
@@ -150,8 +151,10 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 	}
 
 	hs := newServerHandshake(nodeID, keypair)
-
-	// XXX: Set the request timer.
+	err := c.conn.SetReadDeadline(time.Now().Add(connectionTimeout))
+	if err != nil {
+		return err
+	}
 
 	// Consume the client handshake.
 	hsBuf := make([]byte, clientMaxHandshakeLength)
@@ -169,15 +172,23 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 			return err
 		}
 		c.receiveBuffer.Reset()
+		err = c.conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			return err
+		}
 
 		// Use the derived key material to intialize the link crypto.
 		okm := ntor.Kdf(seed, framing.KeyLength*2)
 		c.encoder = framing.NewEncoder(okm[framing.KeyLength:])
 		c.decoder = framing.NewDecoder(okm[:framing.KeyLength])
 
-		// XXX: Kill the request timer.
-
 		break
+	}
+
+	// Ensure that writing the response completes quickly.
+	err = c.conn.SetWriteDeadline(time.Now().Add(connectionTimeout))
+	if err != nil {
+		return err
 	}
 
 	// Generate/send the response.
@@ -190,7 +201,13 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		return err
 	}
 
-	// XXX: Generate/send the PRNG seed.
+	// TODO: Generate/send the PRNG seed.
+
+	// Disarm the write timer.
+	err = c.conn.SetWriteDeadline(time.Time{})
+	if err != nil {
+		return err
+	}
 
 	c.isOk = true
 
