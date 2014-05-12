@@ -104,13 +104,13 @@ func serverHandler(conn net.Conn, info *pt.ServerInfo) error {
 	oConn, _ := conn.(*obfs4.Obfs4Conn)
 	err := oConn.ServerHandshake()
 	if err != nil {
-		log.Printf("server: Handshake failed: %s", err)
+		log.Printf("[WARN] server: Handshake failed: %s", err)
 		return err
 	}
 
 	or, err := pt.DialOr(info, conn.RemoteAddr().String(), obfs4Method)
 	if err != nil {
-		log.Printf("server: DialOr failed: %s", err)
+		log.Printf("[ERROR] server: DialOr failed: %s", err)
 		return err
 	}
 	defer or.Close()
@@ -149,12 +149,12 @@ func serverSetup() bool {
 			// Handle the mandetory arguments.
 			privateKey, ok := bindaddr.Options.Get("private-key")
 			if !ok {
-				pt.SmethodError(bindaddr.MethodName, "need a private-key option")
+				pt.SmethodError(bindaddr.MethodName, "needs a private-key option")
 				break
 			}
 			nodeID, ok := bindaddr.Options.Get("node-id")
 			if !ok {
-				pt.SmethodError(bindaddr.MethodName, "need a node-id option")
+				pt.SmethodError(bindaddr.MethodName, "needs a node-id option")
 				break
 			}
 
@@ -190,13 +190,13 @@ func clientHandler(conn *pt.SocksConn) error {
 	// Extract the peer's node ID and public key.
 	nodeID, ok := conn.Req.Args.Get("node-id")
 	if !ok {
-		log.Printf("client: missing node-id argument")
+		log.Printf("[ERROR] client: missing node-id argument")
 		conn.Reject()
 		return nil
 	}
 	publicKey, ok := conn.Req.Args.Get("public-key")
 	if !ok {
-		log.Printf("client: missing public-key argument")
+		log.Printf("[ERROR] client: missing public-key argument")
 		conn.Reject()
 		return nil
 	}
@@ -208,7 +208,7 @@ func clientHandler(conn *pt.SocksConn) error {
 
 	remote, err := obfs4.Dial("tcp", conn.Req.Target, nodeID, publicKey)
 	if err != nil {
-		log.Printf("client: Handshake failed: %s", err)
+		log.Printf("[ERROR] client: Handshake failed: %s", err)
 		conn.Reject()
 		return err
 	}
@@ -228,7 +228,6 @@ func clientAcceptLoop(ln *pt.SocksListener) error {
 	for {
 		conn, err := ln.AcceptSocks()
 		if err != nil {
-			log.Println("AcceptSocks() failed:", err)
 			if e, ok := err.(net.Error); ok && !e.Temporary() {
 				return err
 			}
@@ -287,14 +286,14 @@ func ptGetStateDir() string {
 	stat, err := os.Stat(dir)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Fatalf("Failed to stat log path: %s", err)
+			log.Fatalf("[ERROR] Failed to stat path: %s", err)
 		}
 		err = os.Mkdir(dir, 0755)
 		if err != nil {
-			log.Fatalf("Failed to create path: %s", err)
+			log.Fatalf("[ERROR] Failed to create path: %s", err)
 		}
 	} else if !stat.IsDir() {
-		log.Fatalf("Pluggable Transport state location is not a directory")
+		log.Fatalf("[ERROR] Pluggable Transport state location is not a directory")
 	}
 
 	return dir
@@ -308,7 +307,7 @@ func ptInitializeLogging() {
 
 	f, err := os.OpenFile(path.Join(dir, obfs4LogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		log.Fatalf("Failed to open log file: %s", err)
+		log.Fatalf("[ERROR] Failed to open log file: %s", err)
 	}
 	log.SetOutput(f)
 }
@@ -358,10 +357,10 @@ func main() {
 		launched = serverSetup()
 	}
 	if !launched {
-		log.Fatal("obfs4proxy must be run as a managed transport or server.")
+		log.Fatal("[ERROR] obfs4proxy must be run as a managed transport or server")
 	}
 
-	log.Println("obfs4proxy - Launched and listening")
+	log.Println("[INFO] obfs4proxy - Launched and listening")
 
 	// Handle termination notification.
 	numHandlers := 0
