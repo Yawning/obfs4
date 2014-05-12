@@ -61,7 +61,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"log"
 
 	"code.google.com/p/go.crypto/nacl/secretbox"
 
@@ -127,7 +126,7 @@ type boxNonce struct {
 
 func (nonce *boxNonce) init(prefix []byte) {
 	if noncePrefixLength != len(prefix) {
-		log.Panicf("BUG: Nonce prefix length invalid: %d", len(prefix))
+		panic(fmt.Sprintf("BUG: Nonce prefix length invalid: %d", len(prefix)))
 	}
 
 	copy(nonce.prefix[:], prefix)
@@ -161,7 +160,7 @@ type Encoder struct {
 // containing exactly KeyLength bytes of keying material.
 func NewEncoder(key []byte) *Encoder {
 	if len(key) != KeyLength {
-		log.Panicf("BUG: Invalid encoder key length: %d", len(key))
+		panic(fmt.Sprintf("BUG: Invalid encoder key length: %d", len(key)))
 	}
 
 	encoder := new(Encoder)
@@ -223,7 +222,7 @@ type Decoder struct {
 // containing exactly KeyLength bytes of keying material.
 func NewDecoder(key []byte) *Decoder {
 	if len(key) != KeyLength {
-		log.Panicf("BUG: Invalid decoder key length: %d", len(key))
+		panic(fmt.Sprintf("BUG: Invalid decoder key length: %d", len(key)))
 	}
 
 	decoder := new(Decoder)
@@ -253,7 +252,7 @@ func (decoder *Decoder) Decode(data *bytes.Buffer) (int, []byte, error) {
 			return 0, nil, err
 		} else if n != lengthLength {
 			// Should *NEVER* happen, since at least 2 bytes exist.
-			log.Panicf("BUG: Failed to read obfuscated length: %d", n)
+			panic(fmt.Sprintf("BUG: Failed to read obfuscated length: %d", n))
 		}
 
 		// Derive the nonce the peer used.
@@ -285,8 +284,8 @@ func (decoder *Decoder) Decode(data *bytes.Buffer) (int, []byte, error) {
 		return 0, nil, err
 	} else if n != int(decoder.nextLength) {
 		// Should *NEVER* happen, since at least 2 bytes exist.
-		log.Panicf("BUG: Failed to read secretbox, got %d, should have %d", n,
-			decoder.nextLength)
+		panic(fmt.Sprintf("BUG: Failed to read secretbox, got %d, should have %d",
+						  n, decoder.nextLength))
 	}
 	out, ok := secretbox.Open(nil, box, &decoder.nextNonce, &decoder.key)
 	if !ok {

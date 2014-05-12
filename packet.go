@@ -30,7 +30,6 @@ package obfs4
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 
 	"github.com/yawning/obfs4/framing"
 )
@@ -68,8 +67,8 @@ func makePacket(pkt []byte, pktType uint8, data []byte, padLen uint16) int {
 	pktLen := packetOverhead + len(data) + int(padLen)
 
 	if len(data)+int(padLen) > maxPacketPayloadLength {
-		log.Panicf("BUG: makePacket() len(data) + padLen > maxPacketPayloadLength: %d + %d > %d",
-			len(data), padLen, maxPacketPayloadLength)
+		panic(fmt.Sprintf("BUG: makePacket() len(data) + padLen > maxPacketPayloadLength: %d + %d > %d",
+			len(data), padLen, maxPacketPayloadLength))
 	}
 
 	// Packets are:
@@ -104,7 +103,6 @@ func (c *Obfs4Conn) decodePacket(pkt []byte) error {
 		c.receiveDecodedBuffer.Write(payload)
 	default:
 		// Ignore unrecognised packet types.
-		log.Printf("[INFO] - Ignoring packet type: %d", pktType)
 	}
 
 	return nil

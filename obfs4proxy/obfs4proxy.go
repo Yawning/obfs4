@@ -75,28 +75,37 @@ var ptListeners []net.Listener
 // ends, -1 is written.
 var handlerChan = make(chan int)
 
+func logAndRecover() {
+	if err := recover(); err != nil {
+		log.Println("[ERROR] Panic:", err)
+	}
+}
+
 func copyLoop(a, b net.Conn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// XXX: Log/propagate errors.
 	go func() {
+		defer logAndRecover()
+		defer wg.Done()
+
 		_, err := io.Copy(b, a)
 		if err != nil {
 			b.Close()
 			a.Close()
 			log.Printf("[WARN] Connection closed: %s", err)
 		}
-		wg.Done()
 	}()
 	go func() {
+		defer logAndRecover()
+		defer wg.Done()
+
 		_, err := io.Copy(a, b)
 		if err != nil {
 			a.Close()
 			b.Close()
 			log.Printf("[WARN] Connection closed: %s", err)
 		}
-		wg.Done()
 	}()
 
 	wg.Wait()
@@ -104,6 +113,7 @@ func copyLoop(a, b net.Conn) {
 
 func serverHandler(conn net.Conn, info *pt.ServerInfo) error {
 	defer conn.Close()
+	defer logAndRecover()
 
 	handlerChan <- 1
 	defer func() {
@@ -216,6 +226,7 @@ func clientHandler(conn *pt.SocksConn) error {
 		handlerChan <- -1
 	}()
 
+	defer logAndRecover()
 	remote, err := obfs4.Dial("tcp", conn.Req.Target, nodeID, publicKey)
 	if err != nil {
 		log.Printf("[ERROR] client: Handshake failed: %s", err)

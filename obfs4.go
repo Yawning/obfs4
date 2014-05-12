@@ -30,7 +30,7 @@ package obfs4
 
 import (
 	"bytes"
-	"log"
+	"fmt"
 	"net"
 	"syscall"
 	"time"
@@ -98,7 +98,7 @@ func (c *Obfs4Conn) closeAfterDelay() {
 
 func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicKey) error {
 	if c.isServer {
-		log.Panicf("BUG: clientHandshake() called for server connection")
+		panic(fmt.Sprintf("BUG: clientHandshake() called for server connection"))
 	}
 
 	// Generate/send the client handshake.
@@ -156,7 +156,7 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 
 func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) error {
 	if !c.isServer {
-		log.Panicf("BUG: serverHandshake() called for client connection")
+		panic(fmt.Sprintf("BUG: serverHandshake() called for client connection"))
 	}
 
 	hs := newServerHandshake(nodeID, keypair)
@@ -220,7 +220,7 @@ func (c *Obfs4Conn) ServerHandshake() error {
 
 	// Clients handshake as part of Dial.
 	if !c.isServer {
-		log.Panicf("BUG: ServerHandshake() called for client connection")
+		panic(fmt.Sprintf("BUG: ServerHandshake() called for client connection"))
 	}
 
 	// Regardless of what happens, don't need the listener past returning from
@@ -297,7 +297,7 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 			c.isOk = false
 			return nSent, err
 		} else if n == 0 {
-			log.Panicf("BUG: Write(), chopping length was 0")
+			panic(fmt.Sprintf("BUG: Write(), chopping length was 0"))
 		}
 		nSent += n
 
