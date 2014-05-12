@@ -42,7 +42,7 @@ const (
 	defaultReadSize   = framing.MaximumSegmentLength
 	connectionTimeout = time.Duration(15) * time.Second
 
-	minCloseThreshold = framing.MaximumSegmentLength
+	minCloseThreshold = 0
 	maxCloseThreshold = framing.MaximumSegmentLength * 5
 	minCloseInterval  = 0
 	maxCloseInterval  = 60
@@ -199,14 +199,14 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		return err
 	}
 
-	// TODO: Generate/send the PRNG seed.
-
 	err = c.conn.SetDeadline(time.Time{})
 	if err != nil {
 		return err
 	}
 
 	c.isOk = true
+
+	// TODO: Generate/send the PRNG seed.
 
 	return nil
 }
@@ -262,10 +262,7 @@ func (c *Obfs4Conn) Read(b []byte) (int, error) {
 			if err == framing.ErrAgain {
 				break
 			} else if err != nil {
-				// Any non-timeout frame decoder errors are fatal.
-				if neterr, ok := err.(net.Error); ok && !neterr.Timeout() {
-					c.isOk = false
-				}
+				// Any other frame decoder errors are fatal.
 				return 0, err
 			}
 
@@ -286,8 +283,6 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 	var frameBuf bytes.Buffer
 
 	for chopBuf.Len() > 0 {
-		// TODO: Support randomly padding frames.
-
 		// Send maximum sized frames.
 		n, err := chopBuf.Read(buf)
 		if err != nil {
@@ -312,13 +307,15 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 		nSent += n
 	}
 
-	// Send the frame.
+	// TODO: Insert random padding.
+
+	// Send the frame(s).
 	_, err := c.conn.Write(frameBuf.Bytes())
 	if err != nil {
-		// Non-timeout write errors as fatal.
-		if neterr, ok := err.(net.Error); ok && !neterr.Timeout() {
-			c.isOk = false
-		}
+		// Partial writes are fatal because the frame encoder state is advanced
+		// at this point.  It's possible to keep frameBuf around, but fuck it.
+		// Someone that wants write timeouts can change this.
+		c.isOk = false
 		return nSent, err
 	}
 
@@ -352,11 +349,7 @@ func (c *Obfs4Conn) RemoteAddr() net.Addr {
 }
 
 func (c *Obfs4Conn) SetDeadline(t time.Time) error {
-	if !c.isOk {
-		return syscall.EINVAL
-	}
-
-	return c.conn.SetDeadline(t)
+	return syscall.ENOTSUP
 }
 
 func (c *Obfs4Conn) SetReadDeadline(t time.Time) error {
@@ -368,11 +361,7 @@ func (c *Obfs4Conn) SetReadDeadline(t time.Time) error {
 }
 
 func (c *Obfs4Conn) SetWriteDeadline(t time.Time) error {
-	if !c.isOk {
-		return syscall.EINVAL
-	}
-
-	return c.conn.SetWriteDeadline(t)
+	return syscall.ENOTSUP
 }
 
 func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
