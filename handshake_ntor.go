@@ -363,13 +363,10 @@ func findMark(mark, buf []byte, startPos, maxPos int) int {
 	return pos + startPos
 }
 
-func makePad(min, max int64) ([]byte, error) {
-	padLen, err := randRange(min, max)
-	if err != nil {
-		return nil, err
-	}
+func makePad(min, max int) ([]byte, error) {
+	padLen := randRange(min, max)
 	pad := make([]byte, padLen)
-	_, err = rand.Read(pad)
+	_, err := rand.Read(pad)
 	if err != nil {
 		return nil, err
 	}

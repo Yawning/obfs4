@@ -40,6 +40,7 @@ import (
 )
 
 const (
+	headerLength      = framing.FrameOverhead + packetOverhead
 	defaultReadSize   = framing.MaximumSegmentLength
 	connectionTimeout = time.Duration(15) * time.Second
 
@@ -54,6 +55,8 @@ const (
 type Obfs4Conn struct {
 	conn net.Conn
 
+	probDist *wDist
+
 	encoder *framing.Encoder
 	decoder *framing.Decoder
 
@@ -67,21 +70,32 @@ type Obfs4Conn struct {
 	listener *Obfs4Listener
 }
 
+func (c *Obfs4Conn) calcPadLen(burstLen int) int {
+	tailLen := burstLen % framing.MaximumSegmentLength
+	toPadTo := c.probDist.sample()
+
+	ret := 0
+	if toPadTo >= tailLen {
+		ret = toPadTo - tailLen
+	} else {
+		ret = (framing.MaximumSegmentLength - tailLen) + toPadTo
+	}
+
+	return ret
+}
+
 func (c *Obfs4Conn) closeAfterDelay() {
 	// I-it's not like I w-wanna handshake with you or anything.  B-b-baka!
 	defer c.conn.Close()
 
-	delaySecs, err := randRange(minCloseInterval, maxCloseInterval)
-	if err != nil {
-		return
-	}
-	toDiscard, err := randRange(minCloseThreshold, maxCloseThreshold)
-	if err != nil {
-		return
-	}
+	delaySecs := randRange(minCloseInterval, maxCloseInterval)
+	toDiscard := randRange(minCloseThreshold, maxCloseThreshold)
 
 	delay := time.Duration(delaySecs) * time.Second
-	err = c.conn.SetReadDeadline(time.Now().Add(delay))
+	err := c.conn.SetReadDeadline(time.Now().Add(delay))
+	if err != nil {
+		return
+	}
 
 	// Consume and discard data on this connection until either the specified
 	// interval passes or a certain size has been reached.
@@ -286,7 +300,6 @@ func (c *Obfs4Conn) Read(b []byte) (int, error) {
 func (c *Obfs4Conn) Write(b []byte) (int, error) {
 	chopBuf := bytes.NewBuffer(b)
 	buf := make([]byte, maxPacketPayloadLength)
-	pkt := make([]byte, framing.MaximumFramePayloadLength)
 	nSent := 0
 	var frameBuf bytes.Buffer
 
@@ -295,26 +308,52 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 		n, err := chopBuf.Read(buf)
 		if err != nil {
 			c.isOk = false
-			return nSent, err
+			return 0, err
 		} else if n == 0 {
 			panic(fmt.Sprintf("BUG: Write(), chopping length was 0"))
 		}
 		nSent += n
 
-		// Wrap the payload in a packet.
-		n = makePacket(pkt[:], packetTypePayload, buf[:n], 0)
-
-		// Encode the packet in an AEAD frame.
-		_, frame, err := c.encoder.Encode(pkt[:n])
+		_, frame, err := c.makeAndEncryptPacket(packetTypePayload, buf[:n], 0)
 		if err != nil {
 			c.isOk = false
-			return nSent, err
+			return 0, err
 		}
 
 		frameBuf.Write(frame)
 	}
 
-	// TODO: Insert random padding.
+	// Insert random padding.  In theory it's possible to inline padding for
+	// certain framesizes into the last AEAD packet, but always sending 1 or 2
+	// padding frames is considerably easier.
+	padLen := c.calcPadLen(frameBuf.Len())
+	if padLen > 0 {
+		if padLen > headerLength {
+			_, frame, err := c.makeAndEncryptPacket(packetTypePayload, []byte{},
+				uint16(padLen-headerLength))
+			if err != nil {
+				c.isOk = false
+				return 0, err
+			}
+			frameBuf.Write(frame)
+		} else {
+			_, frame, err := c.makeAndEncryptPacket(packetTypePayload, []byte{},
+				maxPacketPayloadLength)
+			if err != nil {
+				c.isOk = false
+				return 0, err
+			}
+			frameBuf.Write(frame)
+
+			_, frame, err = c.makeAndEncryptPacket(packetTypePayload, []byte{},
+				uint16(padLen))
+			if err != nil {
+				c.isOk = false
+				return 0, err
+			}
+			frameBuf.Write(frame)
+		}
+	}
 
 	// Send the frame(s).
 	_, err := c.conn.Write(frameBuf.Bytes())
@@ -323,7 +362,7 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 		// at this point.  It's possible to keep frameBuf around, but fuck it.
 		// Someone that wants write timeouts can change this.
 		c.isOk = false
-		return nSent, err // XXX: nSent is a dirty lie here.
+		return 0, err
 	}
 
 	return nSent, nil
@@ -384,6 +423,10 @@ func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
 
 	// Connect to the peer.
 	c := new(Obfs4Conn)
+	c.probDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
+	if err != nil {
+		return nil, err
+	}
 	c.conn, err = net.Dial(network, address)
 	if err != nil {
 		return nil, err
@@ -420,6 +463,11 @@ func (l *Obfs4Listener) Accept() (net.Conn, error) {
 	cObfs.conn = c
 	cObfs.isServer = true
 	cObfs.listener = l
+	cObfs.probDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
+	if err != nil {
+		c.Close()
+		return nil, err
+	}
 
 	return cObfs, nil
 }

@@ -17,7 +17,7 @@ is much closer to ScrambleSuit than obfs2/obfs3.
 The notable differences between ScrambleSuit and obfs4:
 
  * The handshake always does a full key exchange (no such thing as a Session
-   Ticket Handshake). (TODO: Reconsider this.)
+   Ticket Handshake).
  * The handshake uses the Tor Project's ntor handshake with public keys
    obfuscated via the Elligator mapping.
  * The link layer encryption uses NaCl secret boxes (Poly1305/XSalsa20).
@@ -32,7 +32,6 @@ handshake variants without being obscenely slow is non-trivial.
 
 ### TODO
 
- * Packet length obfuscation.
  * (Maybe) Make it resilient to transient connection loss.
  * (Maybe) Use IP_MTU/TCP_MAXSEG to tweak frame size.
  * Write a detailed protocol spec.

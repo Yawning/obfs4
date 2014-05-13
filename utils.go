@@ -28,21 +28,40 @@
 package obfs4
 
 import (
-	"crypto/rand"
+	csrand "crypto/rand"
 	"fmt"
 	"math/big"
+	"math/rand"
 )
 
-func randRange(min, max int64) (int64, error) {
+var (
+	csRandSourceInstance csRandSource
+	csRandInstance       = rand.New(csRandSourceInstance)
+)
+
+type csRandSource struct {
+	// This does not keep any state as it is backed by crypto/rand.
+}
+
+func (r csRandSource) Int63() int64 {
+	ret, err := csrand.Int(csrand.Reader, big.NewInt(int64((1<<63)-1)))
+	if err != nil {
+		panic(err)
+	}
+
+	return ret.Int64()
+}
+
+func (r csRandSource) Seed(seed int64) {
+	// No-op.
+}
+
+func randRange(min, max int) int {
 	if max < min {
 		panic(fmt.Sprintf("randRange: min > max (%d, %d)", min, max))
 	}
 
 	r := (max + 1) - min
-	ret, err := rand.Int(rand.Reader, big.NewInt(r))
-	if err != nil {
-		return 0, err
-	}
-
-	return ret.Int64() + min, nil
+	ret := csRandInstance.Intn(r)
+	return ret + min
 }

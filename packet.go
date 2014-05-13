@@ -79,10 +79,23 @@ func makePacket(pkt []byte, pktType uint8, data []byte, padLen uint16) int {
 
 	pkt[0] = pktType
 	binary.BigEndian.PutUint16(pkt[1:], uint16(len(data)))
-	copy(pkt[3:], data[:])
+	if len(data) > 0 {
+		copy(pkt[3:], data[:])
+	}
 	copy(pkt[3+len(data):], zeroPadBytes[:padLen])
 
 	return pktLen
+}
+
+func (c *Obfs4Conn) makeAndEncryptPacket(pktType uint8, data []byte, padLen uint16) (int, []byte, error) {
+	var pkt [framing.MaximumFramePayloadLength]byte
+
+	// Wrap the payload in a packet.
+	n := makePacket(pkt[:], pktType, data[:], padLen)
+
+	// Encode the packet in an AEAD frame.
+	n, frame, err := c.encoder.Encode(pkt[:n])
+	return n, frame, err
 }
 
 func (c *Obfs4Conn) decodePacket(pkt []byte) error {
@@ -99,8 +112,13 @@ func (c *Obfs4Conn) decodePacket(pkt []byte) error {
 	payload := pkt[3 : 3+payloadLen]
 	switch pktType {
 	case packetTypePayload:
-		// packetTypePayload
-		c.receiveDecodedBuffer.Write(payload)
+		if len(payload) > 0 {
+			c.receiveDecodedBuffer.Write(payload)
+		}
+	case packetTypePrngSeed:
+		if len(payload) == distSeedLength {
+			c.probDist.reset(payload)
+		}
 	default:
 		// Ignore unrecognised packet types.
 	}
