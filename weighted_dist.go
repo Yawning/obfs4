@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Yawning Angel <yawning at schwanenlied dot me>
+ * Copyright (c) 2014, Yawning Angel <yawning at torproject dot org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
