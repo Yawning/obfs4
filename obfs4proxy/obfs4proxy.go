@@ -88,22 +88,22 @@ func copyLoop(a, b net.Conn) {
 	go func() {
 		defer logAndRecover()
 		defer wg.Done()
+		defer b.Close()
+		defer a.Close()
 
 		_, err := io.Copy(b, a)
 		if err != nil {
-			b.Close()
-			a.Close()
 			log.Printf("[WARN] Connection closed: %s", err)
 		}
 	}()
 	go func() {
 		defer logAndRecover()
 		defer wg.Done()
+		defer a.Close()
+		defer b.Close()
 
 		_, err := io.Copy(a, b)
 		if err != nil {
-			a.Close()
-			b.Close()
 			log.Printf("[WARN] Connection closed: %s", err)
 		}
 	}()
