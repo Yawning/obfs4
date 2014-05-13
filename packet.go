@@ -125,3 +125,5 @@ func (c *Obfs4Conn) decodePacket(pkt []byte) error {
 
 	return nil
 }
+
+/* vim :set ts=4 sw=4 sts=4 noet : */

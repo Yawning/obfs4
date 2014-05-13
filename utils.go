@@ -65,3 +65,5 @@ func randRange(min, max int) int {
 	ret := csRandInstance.Intn(r)
 	return ret + min
 }
+
+/* vim :set ts=4 sw=4 sts=4 noet : */
