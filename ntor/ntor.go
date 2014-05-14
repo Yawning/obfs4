@@ -314,7 +314,7 @@ func KeypairFromBase64(encoded string) (*Keypair, error) {
 
 // ServerHandshake does the server side of a ntor handshake and returns status,
 // KEY_SEED, and AUTH.  If status is not true, the handshake MUST be aborted.
-func ServerHandshake(clientPublic *PublicKey, serverKeypair *Keypair, idKeypair *Keypair, id *NodeID) (bool, *KeySeed, *Auth) {
+func ServerHandshake(clientPublic *PublicKey, serverKeypair *Keypair, idKeypair *Keypair, id *NodeID) (ok bool, keySeed *KeySeed, auth *Auth) {
 	var notOk int
 	var secretInput bytes.Buffer
 
@@ -330,7 +330,7 @@ func ServerHandshake(clientPublic *PublicKey, serverKeypair *Keypair, idKeypair 
 	notOk |= constantTimeIsZero(exp[:])
 	secretInput.Write(exp[:])
 
-	keySeed, auth := ntorCommon(secretInput, id, idKeypair.public,
+	keySeed, auth = ntorCommon(secretInput, id, idKeypair.public,
 		clientPublic, serverKeypair.public)
 	return notOk == 0, keySeed, auth
 }
@@ -338,7 +338,7 @@ func ServerHandshake(clientPublic *PublicKey, serverKeypair *Keypair, idKeypair 
 // ClientHandshake does the client side of a ntor handshake and returnes
 // status, KEY_SEED, and AUTH.  If status is not true or AUTH does not match
 // the value recieved from the server, the handshake MUST be aborted.
-func ClientHandshake(clientKeypair *Keypair, serverPublic *PublicKey, idPublic *PublicKey, id *NodeID) (bool, *KeySeed, *Auth) {
+func ClientHandshake(clientKeypair *Keypair, serverPublic *PublicKey, idPublic *PublicKey, id *NodeID) (ok bool, keySeed *KeySeed, auth *Auth) {
 	var notOk int
 	var secretInput bytes.Buffer
 
@@ -354,7 +354,7 @@ func ClientHandshake(clientKeypair *Keypair, serverPublic *PublicKey, idPublic *
 	notOk |= constantTimeIsZero(exp[:])
 	secretInput.Write(exp[:])
 
-	keySeed, auth := ntorCommon(secretInput, id, idPublic,
+	keySeed, auth = ntorCommon(secretInput, id, idPublic,
 		clientKeypair.public, serverPublic)
 	return notOk == 0, keySeed, auth
 }
