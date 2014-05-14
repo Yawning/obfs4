@@ -1,4 +1,4 @@
-## obfs4 - The fourbfuscator
+## obfs4 - The obfourscator
 #### Yawning Angel (yawning at torproject dot org)
 
 ### WARNING
