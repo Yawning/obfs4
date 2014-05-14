@@ -100,18 +100,18 @@ func (c *Obfs4Conn) producePacket(w io.Writer, pktType uint8, data []byte, padLe
 	pktLen := packetOverhead + len(data) + int(padLen)
 
 	// Encode the packet in an AEAD frame.
-	// TODO: Change Encode to write into frame directly
-	var frame []byte
-	_, frame, err = c.encoder.Encode(pkt[:pktLen])
+	var frame [framing.MaximumSegmentLength]byte
+	frameLen := 0
+	frameLen, err = c.encoder.Encode(frame[:], pkt[:pktLen])
 	if err != nil {
 		// All encoder errors are fatal.
 		return
 	}
 	var wrLen int
-	wrLen, err = w.Write(frame)
+	wrLen, err = w.Write(frame[:frameLen])
 	if err != nil {
 		return
-	} else if wrLen < len(frame) {
+	} else if wrLen < frameLen {
 		err = io.ErrShortWrite
 		return
 	}
@@ -132,22 +132,23 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 	}
 	c.receiveBuffer.Write(buf[:rdLen])
 
+	var decoded [framing.MaximumFramePayloadLength]byte
 	for c.receiveBuffer.Len() > 0 {
 		// Decrypt an AEAD frame.
-		// TODO: Change Decode to write into packet directly
-		var pkt []byte
-		_, pkt, err = c.decoder.Decode(&c.receiveBuffer)
+		decLen := 0
+		decLen, err = c.decoder.Decode(decoded[:], &c.receiveBuffer)
 		if err == framing.ErrAgain {
 			// The accumulated payload does not make up a full frame.
 			return
 		} else if err != nil {
 			break
-		} else if len(pkt) < packetOverhead {
-			err = InvalidPacketLengthError(len(pkt))
+		} else if decLen < packetOverhead {
+			err = InvalidPacketLengthError(decLen)
 			break
 		}
 
 		// Decode the packet.
+		pkt := decoded[0:decLen]
 		pktType := pkt[0]
 		payloadLen := binary.BigEndian.Uint16(pkt[1:])
 		if int(payloadLen) > len(pkt)-packetOverhead {

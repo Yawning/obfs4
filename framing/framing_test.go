@@ -69,17 +69,14 @@ func TestEncoder_Encode(t *testing.T) {
 	buf := make([]byte, MaximumFramePayloadLength)
 	_, _ = rand.Read(buf) // YOLO
 	for i := 0; i <= MaximumFramePayloadLength; i++ {
-		n, frame, err := encoder.Encode(buf[0:i])
+		var frame [MaximumSegmentLength]byte
+		n, err := encoder.Encode(frame[:], buf[0:i])
 		if err != nil {
 			t.Fatalf("Encoder.encode([%d]byte), failed: %s", i, err)
 		}
 		if n != i+FrameOverhead {
 			t.Fatalf("Unexpected encoded framesize: %d, expecting %d", n, i+
 				FrameOverhead)
-		}
-		if len(frame) != n {
-			t.Fatalf("Encoded frame length/rval mismatch: %d != %d",
-				len(frame), n)
 		}
 	}
 }
@@ -88,9 +85,10 @@ func TestEncoder_Encode(t *testing.T) {
 func TestEncoder_Encode_Oversize(t *testing.T) {
 	encoder := newEncoder(t)
 
-	buf := make([]byte, MaximumFramePayloadLength+1)
-	_, _ = rand.Read(buf) // YOLO
-	_, _, err := encoder.Encode(buf)
+	var frame [MaximumSegmentLength]byte
+	var buf [MaximumFramePayloadLength+1]byte
+	_, _ = rand.Read(buf[:]) // YOLO
+	_, err := encoder.Encode(frame[:], buf[:])
 	if _, ok := err.(InvalidPayloadLengthError); !ok {
 		t.Error("Encoder.encode() returned unexpected error:", err)
 	}
@@ -112,10 +110,11 @@ func TestDecoder_Decode(t *testing.T) {
 	encoder := NewEncoder(key)
 	decoder := NewDecoder(key)
 
-	buf := make([]byte, MaximumFramePayloadLength)
-	_, _ = rand.Read(buf) // YOLO
+	var buf [MaximumFramePayloadLength]byte
+	_, _ = rand.Read(buf[:]) // YOLO
 	for i := 0; i <= MaximumFramePayloadLength; i++ {
-		encLen, frame, err := encoder.Encode(buf[0:i])
+		var frame [MaximumSegmentLength]byte
+		encLen, err := encoder.Encode(frame[:], buf[0:i])
 		if err != nil {
 			t.Fatalf("Encoder.encode([%d]byte), failed: %s", i, err)
 		}
@@ -123,12 +122,10 @@ func TestDecoder_Decode(t *testing.T) {
 			t.Fatalf("Unexpected encoded framesize: %d, expecting %d", encLen,
 				i+FrameOverhead)
 		}
-		if len(frame) != encLen {
-			t.Fatalf("Encoded frame length/rval mismatch: %d != %d",
-				len(frame), encLen)
-		}
 
-		decLen, decoded, err := decoder.Decode(bytes.NewBuffer(frame))
+		var decoded [MaximumFramePayloadLength]byte
+
+		decLen, err := decoder.Decode(decoded[:], bytes.NewBuffer(frame[:encLen]))
 		if err != nil {
 			t.Fatalf("Decoder.decode([%d]byte), failed: %s", i, err)
 		}
@@ -136,13 +133,8 @@ func TestDecoder_Decode(t *testing.T) {
 			t.Fatalf("Unexpected decoded framesize: %d, expecting %d",
 				decLen, i)
 		}
-		if len(decoded) != i {
-			t.Fatalf("Encoded frame length/rval mismatch: %d != %d",
-				len(decoded), i)
 
-		}
-
-		if 0 != bytes.Compare(decoded, buf[0:i]) {
+		if 0 != bytes.Compare(decoded[:decLen], buf[:i]) {
 			t.Fatalf("Frame %d does not match encoder input", i)
 		}
 	}
@@ -152,6 +144,7 @@ func TestDecoder_Decode(t *testing.T) {
 // of payload.
 func BenchmarkEncoder_Encode(b *testing.B) {
 	var chopBuf [MaximumFramePayloadLength]byte
+	var frame [MaximumSegmentLength]byte
 	payload := make([]byte, 1024*1024)
 	encoder := NewEncoder(generateRandomKey())
 	b.ResetTimer()
@@ -165,8 +158,8 @@ func BenchmarkEncoder_Encode(b *testing.B) {
 				b.Fatal("buffer.Read() failed:", err)
 			}
 
-			n, frame, err := encoder.Encode(chopBuf[:n])
-			transfered += len(frame) - FrameOverhead
+			n, err = encoder.Encode(frame[:], chopBuf[:n])
+			transfered += n - FrameOverhead
 		}
 		if transfered != len(payload) {
 			b.Fatalf("Transfered length mismatch: %d != %d", transfered,
