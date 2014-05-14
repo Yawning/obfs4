@@ -32,11 +32,10 @@ handshake variants without being obscenely slow is non-trivial.
 
 ### TODO
 
- * (Maybe) Make it resilient to transient connection loss.
- * (Maybe) Use IP_MTU/TCP_MAXSEG to tweak frame size.
  * Write a detailed protocol spec.
  * Code cleanups.
  * Write more unit tests.
+ * Optimize further.
 
 ### WON'T DO
 
