@@ -100,7 +100,7 @@ var ErrAgain = errors.New("framing: More data needed to decode")
 // Error returned when Decoder.Decode() failes to authenticate a frame.
 var ErrTagMismatch = errors.New("framing: Poly1305 tag mismatch")
 
-// Error returned when the NaCL SecretBox nonce's counter wraps (FATAL).
+// Error returned when the NaCl SecretBox nonce's counter wraps (FATAL).
 var ErrNonceCounterWrapped = errors.New("framing: Nonce counter wrapped")
 
 // InvalidPayloadLengthError is the error returned when Encoder.Encode()
