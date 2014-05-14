@@ -101,9 +101,9 @@ func (c *Obfs4Conn) closeAfterDelay() {
 	// Consume and discard data on this connection until either the specified
 	// interval passes or a certain size has been reached.
 	discarded := 0
-	buf := make([]byte, defaultReadSize)
+	var buf [framing.MaximumSegmentLength]byte
 	for discarded < int(toDiscard) {
-		n, err := c.conn.Read(buf)
+		n, err := c.conn.Read(buf[:])
 		if err != nil {
 			return
 		}
@@ -281,12 +281,12 @@ func (c *Obfs4Conn) WriteTo(w io.Writer) (n int64, err error) {
 	// If there is buffered payload from earlier Read() calls, write.
 	if c.receiveDecodedBuffer.Len() > 0 {
 		wrLen, err = w.Write(c.receiveDecodedBuffer.Bytes())
-		if wrLen < int(c.receiveDecodedBuffer.Len()) {
-			c.isOk = false
-			return int64(wrLen), io.ErrShortWrite
-		} else if err != nil {
+		if err != nil {
 			c.isOk = false
 			return int64(wrLen), err
+		} else if wrLen < int(c.receiveDecodedBuffer.Len()) {
+			c.isOk = false
+			return int64(wrLen), io.ErrShortWrite
 		}
 		c.receiveDecodedBuffer.Reset()
 	}
@@ -308,66 +308,58 @@ func (c *Obfs4Conn) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
-func (c *Obfs4Conn) Write(b []byte) (int, error) {
+func (c *Obfs4Conn) Write(b []byte) (n int, err error) {
 	chopBuf := bytes.NewBuffer(b)
-	buf := make([]byte, maxPacketPayloadLength)
-	nSent := 0
+	var payload [maxPacketPayloadLength]byte
 	var frameBuf bytes.Buffer
 
 	for chopBuf.Len() > 0 {
 		// Send maximum sized frames.
-		n, err := chopBuf.Read(buf)
+		rdLen := 0
+		rdLen, err = chopBuf.Read(payload[:])
 		if err != nil {
 			c.isOk = false
 			return 0, err
-		} else if n == 0 {
+		} else if rdLen == 0 {
 			panic(fmt.Sprintf("BUG: Write(), chopping length was 0"))
 		}
-		nSent += n
+		n += rdLen
 
-		_, frame, err := c.makeAndEncryptPacket(packetTypePayload, buf[:n], 0)
+		err = c.producePacket(&frameBuf, packetTypePayload, payload[:rdLen], 0)
 		if err != nil {
 			c.isOk = false
 			return 0, err
 		}
-
-		frameBuf.Write(frame)
 	}
 
 	// Insert random padding.  In theory it's possible to inline padding for
 	// certain framesizes into the last AEAD packet, but always sending 1 or 2
 	// padding frames is considerably easier.
 	padLen := c.calcPadLen(frameBuf.Len())
-	if padLen > 0 {
-		if padLen > headerLength {
-			_, frame, err := c.makeAndEncryptPacket(packetTypePayload, []byte{},
-				uint16(padLen-headerLength))
-			if err != nil {
-				c.isOk = false
-				return 0, err
-			}
-			frameBuf.Write(frame)
-		} else {
-			_, frame, err := c.makeAndEncryptPacket(packetTypePayload, []byte{},
-				maxPacketPayloadLength)
-			if err != nil {
-				c.isOk = false
-				return 0, err
-			}
-			frameBuf.Write(frame)
-
-			_, frame, err = c.makeAndEncryptPacket(packetTypePayload, []byte{},
-				uint16(padLen))
-			if err != nil {
-				c.isOk = false
-				return 0, err
-			}
-			frameBuf.Write(frame)
+	if padLen > headerLength {
+		err = c.producePacket(&frameBuf, packetTypePayload, []byte{},
+			uint16(padLen-headerLength))
+		if err != nil {
+			c.isOk = false
+			return 0, err
+		}
+	} else if padLen > 0 {
+		err = c.producePacket(&frameBuf, packetTypePayload, []byte{},
+			maxPacketPayloadLength)
+		if err != nil {
+			c.isOk = false
+			return 0, err
+		}
+		err = c.producePacket(&frameBuf, packetTypePayload, []byte{},
+			uint16(padLen))
+		if err != nil {
+			c.isOk = false
+			return 0, err
 		}
 	}
 
 	// Send the frame(s).
-	_, err := c.conn.Write(frameBuf.Bytes())
+	_, err = c.conn.Write(frameBuf.Bytes())
 	if err != nil {
 		// Partial writes are fatal because the frame encoder state is advanced
 		// at this point.  It's possible to keep frameBuf around, but fuck it.
@@ -376,7 +368,7 @@ func (c *Obfs4Conn) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	return nSent, nil
+	return
 }
 
 func (c *Obfs4Conn) Close() error {

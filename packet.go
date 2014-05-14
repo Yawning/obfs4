@@ -67,8 +67,8 @@ func (e InvalidPayloadLengthError) Error() string {
 
 var zeroPadBytes [maxPacketPaddingLength]byte
 
-func makePacket(pkt []byte, pktType uint8, data []byte, padLen uint16) int {
-	pktLen := packetOverhead + len(data) + int(padLen)
+func (c *Obfs4Conn) producePacket(w io.Writer, pktType uint8, data []byte, padLen uint16) error {
+	var pkt [framing.MaximumFramePayloadLength]byte
 
 	if len(data)+int(padLen) > maxPacketPayloadLength {
 		panic(fmt.Sprintf("BUG: makePacket() len(data) + padLen > maxPacketPayloadLength: %d + %d > %d",
@@ -80,7 +80,6 @@ func makePacket(pkt []byte, pktType uint8, data []byte, padLen uint16) int {
 	//   uint16_t length   Length of the payload (Big Endian).
 	//   uint8_t[] payload Data payload.
 	//   uint8_t[] padding Padding.
-
 	pkt[0] = pktType
 	binary.BigEndian.PutUint16(pkt[1:], uint16(len(data)))
 	if len(data) > 0 {
@@ -88,18 +87,26 @@ func makePacket(pkt []byte, pktType uint8, data []byte, padLen uint16) int {
 	}
 	copy(pkt[3+len(data):], zeroPadBytes[:padLen])
 
-	return pktLen
-}
-
-func (c *Obfs4Conn) makeAndEncryptPacket(pktType uint8, data []byte, padLen uint16) (int, []byte, error) {
-	var pkt [framing.MaximumFramePayloadLength]byte
-
-	// Wrap the payload in a packet.
-	n := makePacket(pkt[:], pktType, data[:], padLen)
+	pktLen := packetOverhead + len(data) + int(padLen)
 
 	// Encode the packet in an AEAD frame.
-	n, frame, err := c.encoder.Encode(pkt[:n])
-	return n, frame, err
+	// TODO: Change Encode to write into frame directly
+	_, frame, err := c.encoder.Encode(pkt[:pktLen])
+	if err != nil {
+		// All encoder errors are fatal.
+		c.isOk = false
+		return err
+	}
+	wrLen, err := w.Write(frame)
+	if err != nil {
+		c.isOk = false
+		return err
+	} else if wrLen < len(frame) {
+		c.isOk = false
+		return io.ErrShortWrite
+	}
+
+	return nil
 }
 
 func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
@@ -116,7 +123,7 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 
 	for c.receiveBuffer.Len() > 0 {
 		// Decrypt an AEAD frame.
-		// TODO: Change decode to write into packet directly
+		// TODO: Change Decode to write into packet directly
 		var pkt []byte
 		_, pkt, err = c.decoder.Decode(&c.receiveBuffer)
 		if err == framing.ErrAgain {
@@ -145,10 +152,10 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 					// c.WriteTo() skips buffering in c.receiveDecodedBuffer
 					wrLen, err := w.Write(payload)
 					n += wrLen
-					if wrLen < int(payloadLen) {
-						err = io.ErrShortWrite
+					if err != nil {
 						break
-					} else if err != nil {
+					} else if wrLen < int(payloadLen) {
+						err = io.ErrShortWrite
 						break
 					}
 				} else {
