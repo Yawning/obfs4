@@ -31,6 +31,7 @@ package obfs4
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"syscall"
 	"time"
@@ -55,7 +56,7 @@ const (
 type Obfs4Conn struct {
 	conn net.Conn
 
-	probDist *wDist
+	lenProbDist *wDist
 
 	encoder *framing.Encoder
 	decoder *framing.Decoder
@@ -72,7 +73,7 @@ type Obfs4Conn struct {
 
 func (c *Obfs4Conn) calcPadLen(burstLen int) int {
 	tailLen := burstLen % framing.MaximumSegmentLength
-	toPadTo := c.probDist.sample()
+	toPadTo := c.lenProbDist.sample()
 
 	ret := 0
 	if toPadTo >= tailLen {
@@ -258,13 +259,52 @@ func (c *Obfs4Conn) Read(b []byte) (n int, err error) {
 	}
 
 	for c.receiveDecodedBuffer.Len() == 0 {
-		err = c.consumeFramedPackets()
-		if err != nil {
+		_, err = c.consumeFramedPackets(nil)
+		if err == framing.ErrAgain {
+			continue
+		} else if err != nil {
 			return
 		}
 	}
 
 	n, err = c.receiveDecodedBuffer.Read(b)
+	return
+}
+
+func (c *Obfs4Conn) WriteTo(w io.Writer) (n int64, err error) {
+	if !c.isOk {
+		return 0, syscall.EINVAL
+	}
+
+	wrLen := 0
+
+	// If there is buffered payload from earlier Read() calls, write.
+	if c.receiveDecodedBuffer.Len() > 0 {
+		wrLen, err = w.Write(c.receiveDecodedBuffer.Bytes())
+		if wrLen < int(c.receiveDecodedBuffer.Len()) {
+			c.isOk = false
+			return int64(wrLen), io.ErrShortWrite
+		} else if err != nil {
+			c.isOk = false
+			return int64(wrLen), err
+		}
+		c.receiveDecodedBuffer.Reset()
+	}
+
+	for {
+		wrLen, err = c.consumeFramedPackets(w)
+		n += int64(wrLen)
+		if err == framing.ErrAgain {
+			continue
+		} else if err != nil {
+			// io.EOF is treated as not an error.
+			if err == io.EOF {
+				err = nil
+			}
+			break
+		}
+	}
+
 	return
 }
 
@@ -394,7 +434,7 @@ func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
 
 	// Connect to the peer.
 	c := new(Obfs4Conn)
-	c.probDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
+	c.lenProbDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +474,7 @@ func (l *Obfs4Listener) Accept() (net.Conn, error) {
 	cObfs.conn = c
 	cObfs.isServer = true
 	cObfs.listener = l
-	cObfs.probDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
+	cObfs.lenProbDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
 	if err != nil {
 		c.Close()
 		return nil, err
