@@ -43,7 +43,6 @@
 //
 // Because the pluggable transport requires arguments, obfs4proxy requires
 // tor-0.2.5.x to be useful.
-
 package main
 
 import (
