@@ -252,49 +252,20 @@ func (c *Obfs4Conn) ServerHandshake() error {
 	return err
 }
 
-func (c *Obfs4Conn) Read(b []byte) (int, error) {
+func (c *Obfs4Conn) Read(b []byte) (n int, err error) {
 	if !c.isOk {
 		return 0, syscall.EINVAL
 	}
 
-	if c.receiveDecodedBuffer.Len() > 0 {
-		n, err := c.receiveDecodedBuffer.Read(b)
-		return n, err
-	}
-
-	// Consume and decode frames off the network.
-	buf := make([]byte, defaultReadSize)
 	for c.receiveDecodedBuffer.Len() == 0 {
-		n, err := c.conn.Read(buf)
+		err = c.consumeFramedPackets()
 		if err != nil {
-			return 0, err
-		}
-		c.receiveBuffer.Write(buf[:n])
-
-		// Decode the data just read.
-		for c.receiveBuffer.Len() > 0 {
-			_, frame, err := c.decoder.Decode(&c.receiveBuffer)
-			if err == framing.ErrAgain {
-				break
-			} else if err != nil {
-				// Any other frame decoder errors are fatal.
-				c.isOk = false
-				return 0, err
-			}
-
-			// Decode the packet, if there is payload, it will be placed in
-			// receiveDecodedBuffer automatically.
-			err = c.decodePacket(frame)
-			if err != nil {
-				// All packet decoder errors are fatal.
-				c.isOk = false
-				return 0, err
-			}
+			return
 		}
 	}
 
-	n, err := c.receiveDecodedBuffer.Read(b)
-	return n, err
+	n, err = c.receiveDecodedBuffer.Read(b)
+	return
 }
 
 func (c *Obfs4Conn) Write(b []byte) (int, error) {
