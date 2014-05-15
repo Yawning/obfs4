@@ -297,31 +297,23 @@ func ptIsServer() bool {
 	return env != ""
 }
 
-func ptGetStateDir() string {
-	dir := os.Getenv("TOR_PT_STATE_LOCATION")
+func ptGetStateDir() (dir string, err error) {
+	dir = os.Getenv("TOR_PT_STATE_LOCATION")
 	if dir == "" {
-		return dir
+		return
 	}
 
-	stat, err := os.Stat(dir)
+	err = os.MkdirAll(dir, 0755)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Fatalf("[ERROR] Failed to stat path: %s", err)
-		}
-		err = os.Mkdir(dir, 0755)
-		if err != nil {
-			log.Fatalf("[ERROR] Failed to create path: %s", err)
-		}
-	} else if !stat.IsDir() {
-		log.Fatalf("[ERROR] Pluggable Transport state location is not a directory")
+		log.Fatalf("[ERROR] Failed to create path: %s", err)
 	}
 
-	return dir
+	return
 }
 
 func ptInitializeLogging() {
-	dir := ptGetStateDir()
-	if dir == "" {
+	dir, err := ptGetStateDir()
+	if err != nil || dir == "" {
 		return
 	}
 
