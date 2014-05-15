@@ -467,12 +467,15 @@ func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
 		return nil, err
 	}
 
-	// Connect to the peer.
-	c := new(Obfs4Conn)
-	c.lenProbDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
+	// Generate the initial length obfuscation distribution.
+	seed, err := newRandomDrbgSeed()
 	if err != nil {
 		return nil, err
 	}
+
+	// Connect to the peer.
+	c := new(Obfs4Conn)
+	c.lenProbDist = newWDist(seed, 0, framing.MaximumSegmentLength)
 	c.conn, err = net.Dial(network, address)
 	if err != nil {
 		return nil, err
@@ -495,6 +498,7 @@ type Obfs4Listener struct {
 
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
+	seed    *drbgSeed
 }
 
 func (l *Obfs4Listener) Accept() (net.Conn, error) {
@@ -509,7 +513,7 @@ func (l *Obfs4Listener) Accept() (net.Conn, error) {
 	cObfs.conn = c
 	cObfs.isServer = true
 	cObfs.listener = l
-	cObfs.lenProbDist, err = newWDist(nil, 0, framing.MaximumSegmentLength)
+	cObfs.lenProbDist = newWDist(l.seed, 0, framing.MaximumSegmentLength)
 	if err != nil {
 		c.Close()
 		return nil, err
@@ -544,6 +548,13 @@ func Listen(network, laddr, nodeID, privateKey string) (net.Listener, error) {
 		return nil, err
 	}
 	l.nodeID, err = ntor.NodeIDFromBase64(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate the initial length obfuscation distribution.
+	// XXX: Load this from args.
+	l.seed, err = newRandomDrbgSeed()
 	if err != nil {
 		return nil, err
 	}
