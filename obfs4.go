@@ -468,7 +468,7 @@ func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
 	}
 
 	// Generate the initial length obfuscation distribution.
-	seed, err := newRandomDrbgSeed()
+	seed, err := NewDrbgSeed()
 	if err != nil {
 		return nil, err
 	}
@@ -498,7 +498,7 @@ type Obfs4Listener struct {
 
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
-	seed    *drbgSeed
+	seed    *DrbgSeed
 }
 
 func (l *Obfs4Listener) Accept() (net.Conn, error) {
@@ -538,7 +538,7 @@ func (l *Obfs4Listener) PublicKey() string {
 	return l.keyPair.Public().Base64()
 }
 
-func Listen(network, laddr, nodeID, privateKey string) (net.Listener, error) {
+func Listen(network, laddr, nodeID, privateKey, seed string) (net.Listener, error) {
 	var err error
 
 	// Decode node_id/private_key.
@@ -551,10 +551,7 @@ func Listen(network, laddr, nodeID, privateKey string) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Generate the initial length obfuscation distribution.
-	// XXX: Load this from args.
-	l.seed, err = newRandomDrbgSeed()
+	l.seed, err = DrbgSeedFromBase64(seed)
 	if err != nil {
 		return nil, err
 	}

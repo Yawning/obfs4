@@ -31,7 +31,7 @@
 //
 // Client usage (in torrc):
 //   UseBridges 1
-//   Bridge obfs4 X.X.X.X:YYYY public-key=<Base64 Bridge public key> node-id=<Base64 Bridge Node ID>
+//   Bridge obfs4 X.X.X.X:YYYY <fingerprint> public-key=<Base64 Bridge public key> node-id=<Base64 Bridge Node ID>
 //   ClientTransportPlugin obfs4 exec obfs4proxy
 //
 // Server usage (in torrc):
@@ -176,10 +176,15 @@ func serverSetup() bool {
 				pt.SmethodError(bindaddr.MethodName, "needs a node-id option")
 				break
 			}
+			seed, ok := bindaddr.Options.Get("drbg-seed")
+			if !ok {
+				pt.SmethodError(bindaddr.MethodName, "needs a drbg-seed option")
+				break
+			}
 
 			// Initialize the listener.
 			ln, err := obfs4.Listen("tcp", bindaddr.Addr.String(), nodeID,
-				privateKey)
+				privateKey, seed)
 			if err != nil {
 				pt.SmethodError(bindaddr.MethodName, err.Error())
 				break
@@ -345,16 +350,23 @@ func generateServerParams(id string) {
 		return
 	}
 
+	seed, err := obfs4.NewDrbgSeed()
+	if err != nil {
+		fmt.Println("Failed to generate DRBG seed:", err)
+		return
+	}
+
 	fmt.Println("Generated private-key:", keypair.Private().Base64())
 	fmt.Println("Generated public-key:", keypair.Public().Base64())
+	fmt.Println("Generated drbg-seed:", seed.Base64())
 	fmt.Println()
 	fmt.Println("Client config: ")
 	fmt.Printf("  Bridge obfs4 <IP Address:Port> %s node-id=%s public-key=%s\n",
 		id, parsedID.Base64(), keypair.Public().Base64())
 	fmt.Println()
 	fmt.Println("Server config:")
-	fmt.Printf("  ServerTransportOptions obfs4 node-id=%s private-key=%s\n",
-		parsedID.Base64(), keypair.Private().Base64())
+	fmt.Printf("  ServerTransportOptions obfs4 node-id=%s private-key=%s drbg-seed=%s\n",
+		parsedID.Base64(), keypair.Private().Base64(), seed.Base64())
 }
 
 func main() {

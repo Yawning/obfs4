@@ -173,9 +173,9 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 			}
 		case packetTypePrngSeed:
 			// Only regenerate the distribution if we are the client.
-			if len(payload) >= drbgSeedLength && !c.isServer {
-				var seed *drbgSeed
-				seed, err = drbgSeedFromBytes(payload[:drbgSeedLength])
+			if len(payload) >= DrbgSeedLength && !c.isServer {
+				var seed *DrbgSeed
+				seed, err = DrbgSeedFromBytes(payload[:DrbgSeedLength])
 				if err != nil {
 					break
 				}

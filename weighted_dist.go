@@ -38,26 +38,26 @@ import (
 	"github.com/dchest/siphash"
 )
 
-const drbgSeedLength = 32
+const DrbgSeedLength = 32
 
-// drbgSeed is the initial state for a hashDrbg.  It consists of a SipHash-2-4
+// DrbgSeed is the initial state for a hashDrbg.  It consists of a SipHash-2-4
 // key, and 16 bytes of initial data.
-type drbgSeed [drbgSeedLength]byte
+type DrbgSeed [DrbgSeedLength]byte
 
-// bytes returns a pointer to the raw hashDrbg seed.
-func (seed *drbgSeed) bytes() *[drbgSeedLength]byte {
-	return (*[drbgSeedLength]byte)(seed)
+// Bytes returns a pointer to the raw hashDrbg seed.
+func (seed *DrbgSeed) Bytes() *[DrbgSeedLength]byte {
+	return (*[DrbgSeedLength]byte)(seed)
 }
 
-// base64 returns the Base64 representation of the seed.
-func (seed *drbgSeed) base64() string {
-	return base64.StdEncoding.EncodeToString(seed.bytes()[:])
+// Base64 returns the Base64 representation of the seed.
+func (seed *DrbgSeed) Base64() string {
+	return base64.StdEncoding.EncodeToString(seed.Bytes()[:])
 }
 
-// newRandomDrbgSeed returns a drbgSeed initialized with the runtime CSPRNG.
-func newRandomDrbgSeed() (seed *drbgSeed, err error) {
-	seed = new(drbgSeed)
-	_, err = csrand.Read(seed.bytes()[:])
+// NewDrbgSeed returns a DrbgSeed initialized with the runtime CSPRNG.
+func NewDrbgSeed() (seed *DrbgSeed, err error) {
+	seed = new(DrbgSeed)
+	_, err = csrand.Read(seed.Bytes()[:])
 	if err != nil {
 		return nil, err
 	}
@@ -65,24 +65,28 @@ func newRandomDrbgSeed() (seed *drbgSeed, err error) {
 	return
 }
 
-// drbgSeedFromBytes returns a drbg seed initialized with the caller provided
-// slice.
-func drbgSeedFromBytes(src []byte) (seed *drbgSeed, err error) {
-	if len(src) != drbgSeedLength {
+// DrbgSeedFromBytes creates a DrbgSeed from the raw bytes.
+func DrbgSeedFromBytes(src []byte) (seed *DrbgSeed, err error) {
+	if len(src) != DrbgSeedLength {
 		return nil, InvalidSeedLengthError(len(src))
 	}
 
-	seed = new(drbgSeed)
-	copy(seed.bytes()[:], src)
+	seed = new(DrbgSeed)
+	copy(seed.Bytes()[:], src)
 
 	return
 }
 
-/*
-func drbgSeedFromBse64(encoded string) (seed *drbgSeed, err error) {
-	return
+// DrbgSeedFromBase64 creates a DrbgSeed from the Base64 representation.
+func DrbgSeedFromBase64(encoded string) (seed *DrbgSeed, err error) {
+	var raw []byte
+	raw, err = base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	return DrbgSeedFromBytes(raw)
 }
-*/
 
 // InvalidSeedLengthError is the error returned when the seed provided to the
 // DRBG is an invalid length.
@@ -99,11 +103,11 @@ type hashDrbg struct {
 }
 
 // newHashDrbg makes a hashDrbg instance based off an optional seed.  The seed
-// is truncated to drbgSeedLength.
-func newHashDrbg(seed *drbgSeed) *hashDrbg {
+// is truncated to DrbgSeedLength.
+func newHashDrbg(seed *DrbgSeed) *hashDrbg {
 	drbg := new(hashDrbg)
-	drbg.sip = siphash.New(seed.bytes()[:16])
-	copy(drbg.ofb[:], seed.bytes()[16:])
+	drbg.sip = siphash.New(seed.Bytes()[:16])
+	copy(drbg.ofb[:], seed.Bytes()[16:])
 
 	return drbg
 }
@@ -135,7 +139,7 @@ type wDist struct {
 
 // newWDist creates a weighted distribution of values ranging from min to max
 // based on a hashDrbg initialized with seed.
-func newWDist(seed *drbgSeed, min, max int) (w *wDist) {
+func newWDist(seed *DrbgSeed, min, max int) (w *wDist) {
 	w = new(wDist)
 	w.minValue = min
 	w.maxValue = max
@@ -166,7 +170,7 @@ func (w *wDist) sample() int {
 }
 
 // reset generates a new distribution with the same min/max based on a new seed.
-func (w *wDist) reset(seed *drbgSeed) {
+func (w *wDist) reset(seed *DrbgSeed) {
 	// Initialize the deterministic random number generator.
 	drbg := newHashDrbg(seed)
 	dRng := rand.New(drbg)
