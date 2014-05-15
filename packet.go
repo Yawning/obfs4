@@ -125,21 +125,15 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 	}
 
 	var buf [consumeReadSize]byte
-	var rdLen int
-	rdLen, err = c.conn.Read(buf[:])
-	if err != nil {
-		return
-	}
+	rdLen, rdErr := c.conn.Read(buf[:])
 	c.receiveBuffer.Write(buf[:rdLen])
-
 	var decoded [framing.MaximumFramePayloadLength]byte
 	for c.receiveBuffer.Len() > 0 {
 		// Decrypt an AEAD frame.
 		decLen := 0
 		decLen, err = c.decoder.Decode(decoded[:], &c.receiveBuffer)
 		if err == framing.ErrAgain {
-			// The accumulated payload does not make up a full frame.
-			return
+			break
 		} else if err != nil {
 			break
 		} else if decLen < packetOverhead {
@@ -187,8 +181,12 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 		}
 	}
 
-	// All errors that reach this point are fatal.
-	if err != nil {
+	// Read errors and non-framing.ErrAgain errors are all fatal.
+	if (err != nil && err != framing.ErrAgain) || rdErr != nil {
+		// Propagate read errors correctly.
+		if err == nil && rdErr != nil {
+			err = rdErr
+		}
 		c.setBroken()
 	}
 

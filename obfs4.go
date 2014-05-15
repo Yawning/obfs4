@@ -42,7 +42,6 @@ import (
 
 const (
 	headerLength      = framing.FrameOverhead + packetOverhead
-	defaultReadSize   = framing.MaximumSegmentLength
 	connectionTimeout = time.Duration(15) * time.Second
 
 	minCloseThreshold = 0
@@ -163,6 +162,8 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 		var n int
 		n, err = c.conn.Read(hsBuf[:])
 		if err != nil {
+			// Yes, just bail out of handshaking even if the Read could have
+			// returned data, no point in continuing on EOF/etc.
 			return
 		}
 		c.receiveBuffer.Write(hsBuf[:n])
@@ -215,6 +216,8 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		var n int
 		n, err = c.conn.Read(hsBuf[:])
 		if err != nil {
+			// Yes, just bail out of handshaking even if the Read could have
+			// returned data, no point in continuing on EOF/etc.
 			return
 		}
 		c.receiveBuffer.Write(hsBuf[:n])
@@ -354,7 +357,7 @@ func (c *Obfs4Conn) Write(b []byte) (n int, err error) {
 		}
 	}()
 
-	// XXX: Change this to write directly to c.conn skipping frameBuf.
+	// TODO: Change this to write directly to c.conn skipping frameBuf.
 	chopBuf := bytes.NewBuffer(b)
 	var payload [maxPacketPayloadLength]byte
 	var frameBuf bytes.Buffer
