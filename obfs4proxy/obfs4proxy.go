@@ -337,7 +337,7 @@ func generateServerParams(id string) {
 		return
 	}
 
-	fmt.Println("Generated node_id:", parsedID.Base64())
+	fmt.Println("Generated node-id:", parsedID.Base64())
 
 	keypair, err := ntor.NewKeypair(false)
 	if err != nil {
@@ -347,11 +347,19 @@ func generateServerParams(id string) {
 
 	fmt.Println("Generated private-key:", keypair.Private().Base64())
 	fmt.Println("Generated public-key:", keypair.Public().Base64())
+	fmt.Println()
+	fmt.Println("Client config: ")
+	fmt.Printf("  Bridge obfs4 <IP Address:Port> %s node-id=%s public-key=%s\n",
+		id, parsedID.Base64(), keypair.Public().Base64())
+	fmt.Println()
+	fmt.Println("Server config:")
+	fmt.Printf("  ServerTransportOptions obfs4 node-id=%s private-key=%s\n",
+		parsedID.Base64(), keypair.Private().Base64())
 }
 
 func main() {
 	// Some command line args.
-	genParams := flag.String("gen", "", "Generate params given a Node ID.")
+	genParams := flag.String("gen", "", "Generate server params given a bridge fingerprint.")
 	flag.Parse()
 	if *genParams != "" {
 		generateServerParams(*genParams)
