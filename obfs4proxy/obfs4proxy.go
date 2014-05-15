@@ -39,7 +39,7 @@
 //   ORPort 9001
 //   ExtORPort 6669
 //   ServerTransportPlugin obfs4 exec obfs4proxy
-//   ServerTransportOptions obfs4 private-key=<Base64 Bridge private key> node-id=<Base64 Node ID>
+//   ServerTransportOptions obfs4 private-key=<Base64 Bridge private key> node-id=<Base64 Node ID> drbg-seed=<Base64 DRBG seed>
 //
 // Because the pluggable transport requires arguments, obfs4proxy requires
 // tor-0.2.5.x to be useful.

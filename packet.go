@@ -37,9 +37,10 @@ import (
 )
 
 const (
-	packetOverhead         = 2 + 1
-	maxPacketPayloadLength = framing.MaximumFramePayloadLength - packetOverhead
-	maxPacketPaddingLength = maxPacketPayloadLength
+	packetOverhead          = 2 + 1
+	maxPacketPayloadLength  = framing.MaximumFramePayloadLength - packetOverhead
+	maxPacketPaddingLength  = maxPacketPayloadLength
+	seedPacketPayloadLength = DrbgSeedLength
 
 	consumeReadSize = framing.MaximumSegmentLength * 16
 )
@@ -173,9 +174,9 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 			}
 		case packetTypePrngSeed:
 			// Only regenerate the distribution if we are the client.
-			if len(payload) >= DrbgSeedLength && !c.isServer {
+			if len(payload) == seedPacketPayloadLength && !c.isServer {
 				var seed *DrbgSeed
-				seed, err = DrbgSeedFromBytes(payload[:DrbgSeedLength])
+				seed, err = DrbgSeedFromBytes(payload)
 				if err != nil {
 					break
 				}

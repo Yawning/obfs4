@@ -79,18 +79,37 @@ type Obfs4Conn struct {
 	listener *Obfs4Listener
 }
 
-func (c *Obfs4Conn) calcPadLen(burstLen int) int {
-	tailLen := burstLen % framing.MaximumSegmentLength
+func (c *Obfs4Conn) padBurst(burst *bytes.Buffer) (err error) {
+	tailLen := burst.Len() % framing.MaximumSegmentLength
 	toPadTo := c.lenProbDist.sample()
 
-	ret := 0
+	padLen := 0
 	if toPadTo >= tailLen {
-		ret = toPadTo - tailLen
+		padLen = toPadTo - tailLen
 	} else {
-		ret = (framing.MaximumSegmentLength - tailLen) + toPadTo
+		padLen = (framing.MaximumSegmentLength - tailLen) + toPadTo
 	}
 
-	return ret
+	if padLen > headerLength {
+		err = c.producePacket(burst, packetTypePayload, []byte{},
+			uint16(padLen-headerLength))
+		if err != nil {
+			return
+		}
+	} else if padLen > 0 {
+		err = c.producePacket(burst, packetTypePayload, []byte{},
+			maxPacketPayloadLength)
+		if err != nil {
+			return
+		}
+		err = c.producePacket(burst, packetTypePayload, []byte{},
+			uint16(padLen))
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 func (c *Obfs4Conn) closeAfterDelay() {
@@ -231,6 +250,11 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		}
 		c.receiveBuffer.Reset()
 
+		err = c.conn.SetDeadline(time.Time{})
+		if err != nil {
+			return
+		}
+
 		// Use the derived key material to intialize the link crypto.
 		okm := ntor.Kdf(seed, framing.KeyLength*2)
 		c.encoder = framing.NewEncoder(okm[framing.KeyLength:])
@@ -249,17 +273,21 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 	if err != nil {
 		return
 	}
+	c.state = stateEstablished
 
-	err = c.conn.SetDeadline(time.Time{})
+	// Send the PRNG seed as the first packet.
+	var frameBuf bytes.Buffer
+	err = c.producePacket(&frameBuf, packetTypePrngSeed, c.listener.seed.Bytes()[:], 0)
 	if err != nil {
 		return
 	}
+	err = c.padBurst(&frameBuf)
+	if err != nil {
+		return
+	}
+	_, err = c.conn.Write(frameBuf.Bytes())
 
-	c.state = stateEstablished
-
-	// TODO: Generate/send the PRNG seed.
-
-	return nil
+	return
 }
 
 func (c *Obfs4Conn) CanHandshake() bool {
@@ -379,27 +407,12 @@ func (c *Obfs4Conn) Write(b []byte) (n int, err error) {
 		}
 	}
 
-	// Insert random padding.  In theory it's possible to inline padding for
-	// certain framesizes into the last AEAD packet, but always sending 1 or 2
-	// padding frames is considerably easier.
-	padLen := c.calcPadLen(frameBuf.Len())
-	if padLen > headerLength {
-		err = c.producePacket(&frameBuf, packetTypePayload, []byte{},
-			uint16(padLen-headerLength))
-		if err != nil {
-			return 0, err
-		}
-	} else if padLen > 0 {
-		err = c.producePacket(&frameBuf, packetTypePayload, []byte{},
-			maxPacketPayloadLength)
-		if err != nil {
-			return 0, err
-		}
-		err = c.producePacket(&frameBuf, packetTypePayload, []byte{},
-			uint16(padLen))
-		if err != nil {
-			return 0, err
-		}
+	// Insert random padding.  In theory for some padding lengths, this can be
+	// inlined with the payload, but doing it this way simplifies the code
+	// significantly.
+	err = c.padBurst(&frameBuf)
+	if err != nil {
+		return 0, err
 	}
 
 	// Send the frame(s).
