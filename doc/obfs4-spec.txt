@@ -1,0 +1,244 @@
+   obfs4 (The obfourscator)
+
+0. Introduction
+
+   This is a protocol obfuscation layer for TCP protocols.  It's purpose is to
+   keep a third party from telling what protocol is in use based on message
+   contents.
+
+   Unlike obfs3, obfs4 attempts to provide authentication and data integrity,
+   though it is still designed primarily around providing a layer of
+   obfuscation for an existing authenticated protocol like SSH or TLS.
+
+   Like obfs3 and ScrambleSuit, the protocol has 2 phases: in the first phase
+   both parties establish keys.  In the second, the parties exchange
+   super-enciphered traffic.
+
+1. Motivation
+
+   ScrambleSuit [0] has been developed with the aim of improving the obfs3 [1]
+   protocol to provide resilience against active attackers and to disguise
+   flow signatures.
+ 
+   ScrambleSuit like the existing obfs3 protocol uses UniformDH for the
+   cryptographic handshake which has severe performance implications due
+   modular exponentiation being a expensive operation.  Additionally, the key
+   exchange is not authenticated so it is possible for active attackers to
+   mount a man in the middle attack assuming they know the client/bridge
+   shared secret (k_B).
+
+   obfs4 attempts to address these shortcomings by using an authenticated key
+   exchange mechanism based around the Tor Project's ntor handshake [2].
+   Obfuscation of the Curve25519 public keys transmitted over the wire is
+   accomplished via the Elligator 2 mapping [3].
+
+2. Threat Model
+
+   The thread model of obfs4 is identical to the thread model of obfs2 [4]
+   with added goals/modifications:
+
+   obfs4 offers protection against passive Deep Packet Inspection machines
+   that expect the obfs4 protocol.  Such machines should not be able to verify
+   the existence of the obfs4 protocol without obtaining the server's Node ID
+   and identity public key.
+
+   obfs4 offers protection against active attackers that have obtained the
+   server's Node ID and Curve25519 public key.  Such machines should not be
+   able to impersonate the server and examine the super-enciphered traffic
+   without obtaining the server's identity private key.
+
+   obfs4 offers protection against some non-content protocol fingerprints,
+   specifically the packet size, and optionally packet timing.
+
+   obfs4 provides integrity, confidentiality and authentication.
+
+3. Notation, Constants and Terminology
+
+   All Curve25519 keys and Elligator 2 representatives are transmitted in the
+   Little Endian representation.
+
+   All other values are Big Endian.
+
+   HMAC-SHA256-128(k, s) is the HMAC-SHA256 digest of s with k as the key,
+   truncated to 128 bits.
+
+   x | y is the concatenation of x and y.
+
+   A "byte" is an 8-bit octet.
+
+4. Key Establishment Phase
+
+   As part of the configuration, all obfs4 servers have a 20 byte Node ID
+   (NODEID) and Curve25519 keypair (B,b) that is used to establish that the
+   client knows about a given server and to authenticate the server.
+
+   The server distributes the public component of the identity key (B) and
+   NODEID to the client via an out-of-band mechanism.
+
+   The client handshake process is as follows.
+
+    1. The client generates an ephemeral Curve25519 keypair X,x and an
+       Elligator 2 representative of the public component X'.
+
+    2. The client sends a handshake request to the server where:
+
+           X' = Elligator 2 representative of X
+           P_C = Random padding [87, 1396] bytes long
+           M_C = HMAC-SHA256-128(B | NODEID, X')
+           E = String representation of the number of hours since the UNIX
+               epoch
+           MAC_C = HMAC-SHA256-128(B | NODEID, X' | P_C | M_C | E)
+
+           clientRequest = X' | P_C | M_C | MAC_C
+
+    3. The client receives the serverResponse from the server.
+
+    4. The client derives M_S from the serverResponse and uses it to locate
+       MAC_S in the serverResponse.  It then calculates MAC_S and compares it
+       with the value received from the server.  If M_S cannot be found or the
+       MAC_S values do not match, the client MUST drop the connection.
+
+    5. The client derives Y from Y' via the Elligator 2 map in the reverse
+       direction.
+
+    6. The client completes the client side of the ntor handshake, deriving
+       the 256 bit shared secret (KEY_SEED), and the authentication tag
+       (AUTH).  The client then compares the derived value of AUTH with that
+       contained in the serverResponse.  If the AUTH values do not match, the
+       client MUST drop the connection.
+
+   The server handshake process is as follows.
+
+    1. The server receives the clientRequest from the client.
+
+    2. The server derives M_C from the clientRequest and uses it to locate
+       MAC_C in the clientRequest.  It then calculates MAC_C and compares it
+       with the value received from the client.  If M_C cannot be found or the
+       MAC_C values do not match, the server MUST stop processing data from
+       the client.
+
+       Implementations MAY derive and compare multiple values of M_C with 
+       "E = {E - 1, E, E + 1}" to account for clock skew between the client
+       and server.
+
+       On the event of a failure at this point implementations SHOULD delay
+       dropping the TCP connection from the client by a random interval to
+       make active probing more difficult.
+
+    3. The server derives X from X' via the Elligator 2 map in the reverse
+       direction.
+
+    4. The server generates an ephemeral Curve25519 keypair Y, y and an
+       Elligator 2 representative of the public component Y'.
+
+    5. The server completes the server side of the ntor handshake, deriving
+       the 256 bit shared secret (KEY_SEED), and the authentication tag
+       (AUTH).
+
+    6. The server sends a handshake response to the client where:
+
+           Y' = Elligator 2 Representative of Y
+           AUTH = The ntor authentication tag
+           P_S = Random padding [0, 1364] bytes long
+           M_S = HMAC-SHA256-128(B | NODEID, Y')
+           E' = E from the client request
+           MAC_S = HMAC-SHA256-128(B | NODEID, Y' | AUTH | P_S | M_S | E')
+
+           serverResponse = Y' | AUTH | P_S | M_S | MAC_S
+
+   At the point that each side finishes the handshake, they have a 256 bit
+   shared secret KEY_SEED that is then extracted/expanded via the ntor KDF to
+   produce the 128 bytes of keying material used to encrypt/authenticate the
+   data.
+
+   The keying material is used as follows:
+
+     Bytes 000:031 - Server to Client 256 bit NaCl secretbox key.
+     Bytes 032:047 - Server to Client 128 bit NaCl secretbox nonce prefix.
+     Bytes 048:063 - Server to Client 128 bit SipHash-2-4 key.
+
+     Bytes 064:095 - Client to Server 256 bit NaCl secretbox key.
+     Bytes 096:111 - Client to Server NaCl secretbox nonce prefix.
+     Bytes 112:127 - Client to Server 128 bit SipHash-2-4 key.
+
+5. Data Transfer Phase
+
+   Once both sides have completed the handshake, they transfer application
+   data broken up into "packets", that are then encrypted and authenticated in
+   NaCl crypto_secretbox_xsalsa20poly1305 [5] "frames".
+
+   +------------+----------+--------+--------------+------------+------------+
+   |  2 bytes   | 16 bytes | 1 byte |   2 bytes    | (optional) | (optional) |
+   | Frame len. |   Tag    |  Type  | Payload len. |  Payload   |  Padding   |
+   +------------+----------+--------+--------------+------------+------------+
+    \_ Obfs.  _/ \___________ NaCl secretbox (Poly1305/XSalsa20) ___________/
+
+   The frame length is obfuscated by XORing the length of the NaCl secret box
+   with the 2 byte truncated SipHash-2-4[6] digest of the nonce that is used
+   to seal/unseal the secret box.  Implementations derive the mask used to
+   obfuscate the length upon receiving new payload and reverse the
+   obfuscation.
+
+   The payload length refers to the length of the payload portion of the frame
+   and does not include the padding.  It is possible for the payload length to
+   be 0 in which case all the remaining data is authenticated and decrypted,
+   but ignored.
+
+   The maximum allowed frame length is 1460 bytes, which allows up to 1439
+   bytes of useful payload to be transmitted per "frame".
+
+   If unsealing a secretbox ever fails (due to a Tag mismatch), implementations
+   MUST drop the connection.
+
+   The type field is used to denote the type of payload (if any) contained in
+   each packet.
+
+     TYPE_PAYLOAD (0x00):
+
+         The entire payload is to be treated as application data.
+
+     TYPE_PRNG_SEED (0x01):
+
+         The entire payload is to be treated as seeding material for the
+         protocol polymorphism PRNG.  The format is 32 bytes of seeding
+         material.
+
+   Implementations SHOULD ignore unknown packet types for the purposes of
+   forward compatibility, though each frame MUST still be authenticated and
+   decrypted.
+
+6. Protocol Polymorphism
+
+   Implementations MUST implement protocol polymorphism to obfuscate the obfs4
+   flow signature.  The implementation should follow that of ScrambleSuit (See
+   "ScrambleSuit Protocol Specification", section 4).  Like with ScrambleSuit,
+   implementations MAY omit inter-arrival time obfuscation as a performance
+   trade-off.
+
+   As an optimization, implementations MAY treat the TYPE_PRNG_SEED frame as
+   part of the serverResponse if it always sends the frame immediately
+   following the serverResponse body.  If implementations chose to do this,
+   the TYPE_PRNG_SEED frame MUST have 0 bytes of padding, and P_S MUST
+   consist of [0,1309] bytes of random padding.
+ 
+7. References
+
+   [0]: https://gitweb.torproject.org/user/phw/scramblesuit.git/blob/HEAD:/doc/scramblesuit-spec.txt
+
+   [1]: https://gitweb.torproject.org/pluggable-transports/obfsproxy.git/blob/HEAD:/doc/obfs3/obfs3-protocol-spec.txt
+
+   [2]: https://gitweb.torproject.org/torspec.git/blob/HEAD:/proposals/216-ntor-handshake.txt
+
+   [3]: http://elligator.cr.yp.to/elligator-20130828.pdf
+
+   [4]: https://gitweb.torproject.org/pluggable-transports/obfsproxy.git/blob/HEAD:/doc/obfs2/obfs2-threat-model.txt
+
+   [5]: http://nacl.cr.yp.to/secretbox.html
+
+   [6]: https://131002.net/siphash/
+
+8. Acknowledgments
+
+   Much of the protocol and this specification document is derived from the
+   ScrambleSuit protocol and specification by Philipp Winter.
+
