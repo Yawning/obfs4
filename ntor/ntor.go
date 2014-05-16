@@ -147,6 +147,10 @@ func NodeIDFromBase64(encoded string) (*NodeID, error) {
 
 	return NewNodeID(raw)
 }
+// Bytes returns a pointer to the raw NodeID.
+func (id *NodeID) Bytes() *[NodeIDLength]byte {
+	return (*[NodeIDLength]byte)(id)
+}
 
 // Base64 returns the Base64 representation of the NodeID.
 func (id *NodeID) Base64() string {

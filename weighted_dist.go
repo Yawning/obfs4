@@ -38,6 +38,7 @@ import (
 	"github.com/dchest/siphash"
 )
 
+// DrbgSeedLength is the length of the hashDrbg seed.
 const DrbgSeedLength = 32
 
 // DrbgSeed is the initial state for a hashDrbg.  It consists of a SipHash-2-4

@@ -55,8 +55,8 @@ const (
 		markLength + macLength
 	serverMaxHandshakeLength = framing.MaximumSegmentLength
 
-	markLength = sha256.Size
-	macLength  = sha256.Size
+	markLength = sha256.Size / 2
+	macLength  = sha256.Size / 2
 )
 
 var ErrMarkNotFoundYet = errors.New("handshake: M_[C,S] not found yet")
@@ -107,7 +107,7 @@ func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey) (*c
 	}
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
-	hs.mac = hmac.New(sha256.New, hs.serverIdentity.Bytes()[:])
+	hs.mac = hmac.New(sha256.New, append(hs.serverIdentity.Bytes()[:], hs.nodeID.Bytes()[:]...))
 
 	return hs, nil
 }
@@ -117,13 +117,13 @@ func (hs *clientHandshake) generateHandshake() ([]byte, error) {
 
 	hs.mac.Reset()
 	hs.mac.Write(hs.keypair.Representative().Bytes()[:])
-	mark := hs.mac.Sum(nil)
+	mark := hs.mac.Sum(nil)[:markLength]
 
 	// The client handshake is X | P_C | M_C | MAC(X | P_C | M_C | E) where:
 	//  * X is the client's ephemeral Curve25519 public key representative.
 	//  * P_C is [0,clientMaxPadLength] bytes of random padding.
-	//  * M_C is HMAC-SHA256(serverIdentity, X)
-	//  * MAC is HMAC-SHA256(serverIdentity, X .... E)
+	//  * M_C is HMAC-SHA256-128(serverIdentity | NodeID, X)
+	//  * MAC is HMAC-SHA256-128(serverIdentity | NodeID, X .... E)
 	//  * E is the string representation of the number of hours since the UNIX
 	//    epoch.
 
@@ -143,7 +143,7 @@ func (hs *clientHandshake) generateHandshake() ([]byte, error) {
 	hs.mac.Write(buf.Bytes())
 	hs.epochHour = []byte(strconv.FormatInt(getEpochHour(), 10))
 	hs.mac.Write(hs.epochHour)
-	buf.Write(hs.mac.Sum(nil))
+	buf.Write(hs.mac.Sum(nil)[:macLength])
 
 	return buf.Bytes(), nil
 }
@@ -165,7 +165,7 @@ func (hs *clientHandshake) parseServerHandshake(resp []byte) (int, []byte, error
 		// Derive the mark
 		hs.mac.Reset()
 		hs.mac.Write(hs.serverRepresentative.Bytes()[:])
-		hs.serverMark = hs.mac.Sum(nil)
+		hs.serverMark = hs.mac.Sum(nil)[:markLength]
 	}
 
 	// Attempt to find the mark + MAC.
@@ -182,7 +182,7 @@ func (hs *clientHandshake) parseServerHandshake(resp []byte) (int, []byte, error
 	hs.mac.Reset()
 	hs.mac.Write(resp[:pos+markLength])
 	hs.mac.Write(hs.epochHour)
-	macCmp := hs.mac.Sum(nil)
+	macCmp := hs.mac.Sum(nil)[:macLength]
 	macRx := resp[pos+markLength : pos+markLength+macLength]
 	if !hmac.Equal(macCmp, macRx) {
 		return 0, nil, &InvalidMacError{macCmp, macRx}
@@ -219,7 +219,7 @@ func newServerHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.Keypair) *serv
 	hs := new(serverHandshake)
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
-	hs.mac = hmac.New(sha256.New, hs.serverIdentity.Public().Bytes()[:])
+	hs.mac = hmac.New(sha256.New, append(hs.serverIdentity.Public().Bytes()[:], hs.nodeID.Bytes()[:]...))
 
 	return hs
 }
@@ -239,7 +239,7 @@ func (hs *serverHandshake) parseClientHandshake(resp []byte) ([]byte, error) {
 		// Derive the mark
 		hs.mac.Reset()
 		hs.mac.Write(hs.clientRepresentative.Bytes()[:])
-		hs.clientMark = hs.mac.Sum(nil)
+		hs.clientMark = hs.mac.Sum(nil)[:markLength]
 	}
 
 	// Attempt to find the mark + MAC.
@@ -260,7 +260,7 @@ func (hs *serverHandshake) parseClientHandshake(resp []byte) ([]byte, error) {
 		hs.mac.Reset()
 		hs.mac.Write(resp[:pos+markLength])
 		hs.mac.Write(epochHour)
-		macCmp := hs.mac.Sum(nil)
+		macCmp := hs.mac.Sum(nil)[:macLength]
 		macRx := resp[pos+markLength : pos+markLength+macLength]
 		if hmac.Equal(macCmp, macRx) {
 			macFound = true
@@ -309,14 +309,14 @@ func (hs *serverHandshake) generateHandshake() ([]byte, error) {
 
 	hs.mac.Reset()
 	hs.mac.Write(hs.keypair.Representative().Bytes()[:])
-	mark := hs.mac.Sum(nil)
+	mark := hs.mac.Sum(nil)[:markLength]
 
 	// The server handshake is Y | AUTH | P_S | M_S | MAC(Y | AUTH | P_S | M_S | E) where:
 	//  * Y is the server's ephemeral Curve25519 public key representative.
 	//  * AUTH is the ntor handshake AUTH value.
 	//  * P_S is [0,serverMaxPadLength] bytes of random padding.
-	//  * M_S is HMAC-SHA256(serverIdentity, Y)
-	//  * MAC is HMAC-SHA256(serverIdentity, Y .... E)
+	//  * M_S is HMAC-SHA256-128(serverIdentity | NodeID, Y)
+	//  * MAC is HMAC-SHA256-128(serverIdentity | NodeID, Y .... E)
 	//  * E is the string representation of the number of hours since the UNIX
 	//    epoch.
 
@@ -337,7 +337,7 @@ func (hs *serverHandshake) generateHandshake() ([]byte, error) {
 	hs.mac.Write(buf.Bytes())
 	hs.epochHour = []byte(strconv.FormatInt(getEpochHour(), 10))
 	hs.mac.Write(hs.epochHour)
-	buf.Write(hs.mac.Sum(nil))
+	buf.Write(hs.mac.Sum(nil)[:macLength])
 
 	return buf.Bytes(), nil
 }
