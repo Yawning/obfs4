@@ -169,8 +169,8 @@ func (hs *clientHandshake) parseServerHandshake(resp []byte) (int, []byte, error
 	}
 
 	// Attempt to find the mark + MAC.
-	pos := findMark(hs.serverMark, resp,
-		ntor.RepresentativeLength+ntor.AuthLength, serverMaxHandshakeLength)
+	pos := findMark(hs.serverMark, resp, ntor.RepresentativeLength+ntor.AuthLength+serverMinPadLength,
+		serverMaxHandshakeLength)
 	if pos == -1 {
 		if len(resp) >= serverMaxHandshakeLength {
 			return 0, nil, ErrInvalidHandshake
@@ -243,7 +243,7 @@ func (hs *serverHandshake) parseClientHandshake(resp []byte) ([]byte, error) {
 	}
 
 	// Attempt to find the mark + MAC.
-	pos := findMark(hs.clientMark, resp, ntor.RepresentativeLength,
+	pos := findMark(hs.clientMark, resp, ntor.RepresentativeLength+clientMinPadLength,
 		serverMaxHandshakeLength)
 	if pos == -1 {
 		if len(resp) >= clientMaxHandshakeLength {
@@ -351,6 +351,9 @@ func findMark(mark, buf []byte, startPos, maxPos int) int {
 	endPos := len(buf)
 	if endPos > maxPos {
 		endPos = maxPos
+	}
+	if startPos > len(buf) {
+		return -1
 	}
 
 	// XXX: bytes.Index() uses a naive search, which kind of sucks.
