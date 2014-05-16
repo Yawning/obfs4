@@ -29,21 +29,20 @@
 // Package framing implements the obfs4 link framing and cryptography.
 //
 // The Encoder/Decoder shared secret format is:
-//    uint8_t[32] NaCl SecretBox key
-//    uint8_t[24] NaCl Nonce prefix
+//    uint8_t[32] NaCl secretbox key
+//    uint8_t[16] NaCl Nonce prefix
 //    uint8_t[16] SipHash-2-4 key (used to obfsucate length)
 //
 // The frame format is:
 //   uint16_t length (obfsucated, big endian)
-//   NaCl SecretBox (Poly1305/XSalsa20) containing:
-//     uint8_t[16] tag (Part of the SecretBox construct)
+//   NaCl secretbox (Poly1305/XSalsa20) containing:
+//     uint8_t[16] tag (Part of the secretbox construct)
 //     uint8_t[]   payload
 //
-// The length field is length of the NaCl SecretBox XORed with the truncated
-// SipHash-2-4 digest of the previous SecretBox concatenated with the nonce
-// used to seal the current SecretBox.
+// The length field is length of the NaCl secretbox XORed with the truncated
+// SipHash-2-4 digest of the nonce used to seal/unseal the current secretbox.
 //
-// The NaCl SecretBox (Poly1305/XSalsa20) nonce format is:
+// The NaCl secretbox (Poly1305/XSalsa20) nonce format is:
 //     uint8_t[24] prefix (Fixed)
 //     uint64_t    counter (Big endian)
 //
@@ -101,7 +100,7 @@ var ErrAgain = errors.New("framing: More data needed to decode")
 // Error returned when Decoder.Decode() failes to authenticate a frame.
 var ErrTagMismatch = errors.New("framing: Poly1305 tag mismatch")
 
-// Error returned when the NaCl SecretBox nonce's counter wraps (FATAL).
+// Error returned when the NaCl secretbox nonce's counter wraps (FATAL).
 var ErrNonceCounterWrapped = errors.New("framing: Nonce counter wrapped")
 
 // InvalidPayloadLengthError is the error returned when Encoder.Encode()
@@ -203,9 +202,6 @@ func (encoder *Encoder) Encode(frame, payload []byte) (n int, err error) {
 	length ^= binary.BigEndian.Uint16(lengthMask)
 	binary.BigEndian.PutUint16(frame[:2], length)
 
-	// Prepare the next obfsucator.
-	encoder.sip.Write(box[lengthLength:])
-
 	// Return the frame.
 	return len(box), nil
 }
@@ -293,7 +289,6 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 	if !ok {
 		return 0, ErrTagMismatch
 	}
-	decoder.sip.Write(box[:n])
 
 	// Clean up and prepare for the next frame.
 	decoder.nextLength = 0
