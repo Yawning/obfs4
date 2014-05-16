@@ -263,29 +263,39 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		break
 	}
 
+	//
+	// Since the current and only implementation always sends a PRNG seed for
+	// the length obfuscation, this makes the amount of data received from the
+	// server inconsistent with the length sent from the client.
+	//
+	// Rebalance this by tweaking the client mimimum padding/server maximum
+	// padding, and sending the PRNG seed unpadded (As in, treat the PRNG seed
+	// as part of the server response).  See inlineSeedFrameLength in
+	// handshake_ntor.go.
+	//
+
 	// Generate/send the response.
 	var blob []byte
 	blob, err = hs.generateHandshake()
 	if err != nil {
 		return
 	}
-	_, err = c.conn.Write(blob)
+	var frameBuf bytes.Buffer
+	_, err = frameBuf.Write(blob)
 	if err != nil {
 		return
 	}
 	c.state = stateEstablished
 
 	// Send the PRNG seed as the first packet.
-	var frameBuf bytes.Buffer
 	err = c.producePacket(&frameBuf, packetTypePrngSeed, c.listener.seed.Bytes()[:], 0)
 	if err != nil {
 		return
 	}
-	err = c.padBurst(&frameBuf)
+	_, err = c.conn.Write(frameBuf.Bytes())
 	if err != nil {
 		return
 	}
-	_, err = c.conn.Write(frameBuf.Bytes())
 
 	return
 }

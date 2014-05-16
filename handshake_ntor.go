@@ -44,19 +44,23 @@ import (
 )
 
 const (
-	clientMinPadLength       = serverMinHandshakeLength - clientMinHandshakeLength
+	clientMinPadLength = (serverMinHandshakeLength + inlineSeedFrameLength) -
+		clientMinHandshakeLength
 	clientMaxPadLength       = framing.MaximumSegmentLength - clientMinHandshakeLength
 	clientMinHandshakeLength = ntor.RepresentativeLength + markLength + macLength
 	clientMaxHandshakeLength = framing.MaximumSegmentLength
 
-	serverMinPadLength       = 0
-	serverMaxPadLength       = framing.MaximumSegmentLength - serverMinHandshakeLength
+	serverMinPadLength = 0
+	serverMaxPadLength = framing.MaximumSegmentLength - (serverMinHandshakeLength +
+		inlineSeedFrameLength)
 	serverMinHandshakeLength = ntor.RepresentativeLength + ntor.AuthLength +
 		markLength + macLength
 	serverMaxHandshakeLength = framing.MaximumSegmentLength
 
 	markLength = sha256.Size / 2
 	macLength  = sha256.Size / 2
+
+	inlineSeedFrameLength = framing.FrameOverhead + packetOverhead + seedPacketPayloadLength
 )
 
 var ErrMarkNotFoundYet = errors.New("handshake: M_[C,S] not found yet")
@@ -121,7 +125,7 @@ func (hs *clientHandshake) generateHandshake() ([]byte, error) {
 
 	// The client handshake is X | P_C | M_C | MAC(X | P_C | M_C | E) where:
 	//  * X is the client's ephemeral Curve25519 public key representative.
-	//  * P_C is [0,clientMaxPadLength] bytes of random padding.
+	//  * P_C is [clientMinPadLength,clientMaxPadLength] bytes of random padding.
 	//  * M_C is HMAC-SHA256-128(serverIdentity | NodeID, X)
 	//  * MAC is HMAC-SHA256-128(serverIdentity | NodeID, X .... E)
 	//  * E is the string representation of the number of hours since the UNIX
@@ -314,7 +318,7 @@ func (hs *serverHandshake) generateHandshake() ([]byte, error) {
 	// The server handshake is Y | AUTH | P_S | M_S | MAC(Y | AUTH | P_S | M_S | E) where:
 	//  * Y is the server's ephemeral Curve25519 public key representative.
 	//  * AUTH is the ntor handshake AUTH value.
-	//  * P_S is [0,serverMaxPadLength] bytes of random padding.
+	//  * P_S is [serverMinPadLength,serverMaxPadLength] bytes of random padding.
 	//  * M_S is HMAC-SHA256-128(serverIdentity | NodeID, Y)
 	//  * MAC is HMAC-SHA256-128(serverIdentity | NodeID, Y .... E)
 	//  * E is the string representation of the number of hours since the UNIX
