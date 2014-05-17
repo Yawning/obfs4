@@ -2,7 +2,7 @@
 
 0. Introduction
 
-   This is a protocol obfuscation layer for TCP protocols.  It's purpose is to
+   This is a protocol obfuscation layer for TCP protocols.  Its purpose is to
    keep a third party from telling what protocol is in use based on message
    contents.
 
@@ -21,7 +21,7 @@
    flow signatures.
  
    ScrambleSuit like the existing obfs3 protocol uses UniformDH for the
-   cryptographic handshake which has severe performance implications due
+   cryptographic handshake, which has severe performance implications due to
    modular exponentiation being a expensive operation.  Additionally, the key
    exchange is not authenticated so it is possible for active attackers to
    mount a man in the middle attack assuming they know the client/bridge
@@ -34,30 +34,36 @@
 
 2. Threat Model
 
-   The thread model of obfs4 is identical to the thread model of obfs2 [4]
-   with added goals/modifications:
+   The threat model of obfs4 is the threat model of obfs2 [4] with added
+   goals/modifications:
 
    obfs4 offers protection against passive Deep Packet Inspection machines
    that expect the obfs4 protocol.  Such machines should not be able to verify
    the existence of the obfs4 protocol without obtaining the server's Node ID
    and identity public key.
 
+   obfs4 offers protection against active attackers attempting to probe for
+   obfs4 servers.  Such machines should not be able to verify the existence
+   of an obfs4 server without obtaining the server's Node ID and identity
+   public key.
+
    obfs4 offers protection against active attackers that have obtained the
-   server's Node ID and Curve25519 public key.  Such machines should not be
-   able to impersonate the server and examine the super-enciphered traffic
-   without obtaining the server's identity private key.
+   server's Node ID and identity public key.  Such machines should not be
+   able to impersonate the server without obtaining the server's identity
+   private key.
 
    obfs4 offers protection against some non-content protocol fingerprints,
    specifically the packet size, and optionally packet timing.
 
-   obfs4 provides integrity, confidentiality and authentication.
+   obfs4 provides integrity and confidentiality of the underlying traffic,
+   and authentication of the server.
 
 3. Notation, Constants and Terminology
 
    All Curve25519 keys and Elligator 2 representatives are transmitted in the
-   Little Endian representation.
-
-   All other values are Big Endian.
+   Little Endian representation, for ease of integration with current
+   Curve25519 and Elligator 2 implementations.  All other numeric fields are
+   transmitted as Big Endian (Network byte order) values.
 
    HMAC-SHA256-128(k, s) is the HMAC-SHA256 digest of s with k as the key,
    truncated to 128 bits.
@@ -82,7 +88,7 @@
 
     2. The client sends a handshake request to the server where:
 
-           X' = Elligator 2 representative of X
+           X' = Elligator 2 representative of X (32 bytes)
            P_C = Random padding [87, 1396] bytes long
            M_C = HMAC-SHA256-128(B | NODEID, X')
            E = String representation of the number of hours since the UNIX
@@ -117,7 +123,7 @@
        MAC_C values do not match, the server MUST stop processing data from
        the client.
 
-       Implementations MAY derive and compare multiple values of M_C with 
+       Implementations MUST derive and compare multiple values of MAC_C with
        "E = {E - 1, E, E + 1}" to account for clock skew between the client
        and server.
 
@@ -137,8 +143,8 @@
 
     6. The server sends a handshake response to the client where:
 
-           Y' = Elligator 2 Representative of Y
-           AUTH = The ntor authentication tag
+           Y' = Elligator 2 Representative of Y (32 bytes)
+           AUTH = The ntor authentication tag (32 bytes)
            P_S = Random padding [0, 1364] bytes long
            M_S = HMAC-SHA256-128(B | NODEID, Y')
            E' = E from the client request
@@ -173,11 +179,14 @@
    +------------+----------+--------+--------------+------------+------------+
     \_ Obfs.  _/ \___________ NaCl secretbox (Poly1305/XSalsa20) ___________/
 
-   The frame length is obfuscated by XORing the length of the NaCl secret box
-   with the 2 byte truncated SipHash-2-4[6] digest of the nonce that is used
-   to seal/unseal the secret box.  Implementations derive the mask used to
-   obfuscate the length upon receiving new payload and reverse the
-   obfuscation.
+   The frame length refers to the length of the succeeding secretbox.  To
+   avoid transmitting identifiable length fields in stream, the frame length
+   is obfuscated by XORing the value with the SipHash-2-4[4] digest of the
+   secretbox nonce, truncated to 2 bytes.  As the nonce is deterministic,
+   decoding the length is done by deriving the nonce that will be used to
+   unseal the next secret box, calculating the truncated SipHash-24 digest,
+   and XORing the digest with the obfuscated frame length to obtain the
+   length of the secretbox.
 
    The payload length refers to the length of the payload portion of the frame
    and does not include the padding.  It is possible for the payload length to
