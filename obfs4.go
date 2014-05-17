@@ -42,7 +42,7 @@ import (
 
 const (
 	headerLength      = framing.FrameOverhead + packetOverhead
-	connectionTimeout = time.Duration(15) * time.Second
+	connectionTimeout = time.Duration(30) * time.Second
 
 	minCloseThreshold = 0
 	maxCloseThreshold = framing.MaximumSegmentLength * 5
@@ -324,6 +324,9 @@ func (c *Obfs4Conn) ServerHandshake() error {
 	err := c.serverHandshake(c.listener.nodeID, c.listener.keyPair)
 	c.listener = nil
 	if err != nil {
+		// XXX: Maybe make the timeout period deterministic, since random
+		// hangup intervals are also suspicious.  An ok value would be someting
+		// like the Nginx client_header_timeout (60s).
 		c.closeAfterDelay()
 	}
 
