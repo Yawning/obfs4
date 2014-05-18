@@ -136,6 +136,8 @@ type wDist struct {
 	maxValue int
 	values   []int
 	buckets  []float64
+
+	rng *rand.Rand
 }
 
 // newWDist creates a weighted distribution of values ranging from min to max
@@ -174,15 +176,15 @@ func (w *wDist) sample() int {
 func (w *wDist) reset(seed *DrbgSeed) {
 	// Initialize the deterministic random number generator.
 	drbg := newHashDrbg(seed)
-	dRng := rand.New(drbg)
+	w.rng = rand.New(drbg)
 
 	nBuckets := (w.maxValue + 1) - w.minValue
-	w.values = dRng.Perm(nBuckets)
+	w.values = w.rng.Perm(nBuckets)
 
 	w.buckets = make([]float64, nBuckets)
 	var totalProb float64
 	for i, _ := range w.buckets {
-		prob := dRng.Float64() * (1.0 - totalProb)
+		prob := w.rng.Float64() * (1.0 - totalProb)
 		w.buckets[i] = prob
 		totalProb += prob
 	}

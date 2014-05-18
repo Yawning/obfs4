@@ -44,10 +44,8 @@ const (
 	headerLength      = framing.FrameOverhead + packetOverhead
 	connectionTimeout = time.Duration(30) * time.Second
 
-	minCloseThreshold = 0
-	maxCloseThreshold = framing.MaximumSegmentLength * 5
-	minCloseInterval  = 0
-	maxCloseInterval  = 60
+	maxCloseDelayBytes = framing.MaximumSegmentLength * 5
+	maxCloseDelay  = 60
 )
 
 type connState int
@@ -77,6 +75,9 @@ type Obfs4Conn struct {
 
 	// Server side state.
 	listener *Obfs4Listener
+	startTime time.Time
+	closeDelayBytes int
+	closeDelay int
 }
 
 func (c *Obfs4Conn) padBurst(burst *bytes.Buffer) (err error) {
@@ -116,11 +117,13 @@ func (c *Obfs4Conn) closeAfterDelay() {
 	// I-it's not like I w-wanna handshake with you or anything.  B-b-baka!
 	defer c.conn.Close()
 
-	delaySecs := randRange(minCloseInterval, maxCloseInterval)
-	toDiscard := randRange(minCloseThreshold, maxCloseThreshold)
+	delay := time.Duration(c.closeDelay) * time.Second
+	deadline := c.startTime.Add(delay)
+	if time.Now().After(deadline) {
+		return
+	}
 
-	delay := time.Duration(delaySecs) * time.Second
-	err := c.conn.SetReadDeadline(time.Now().Add(delay))
+	err := c.conn.SetReadDeadline(deadline)
 	if err != nil {
 		return
 	}
@@ -129,7 +132,7 @@ func (c *Obfs4Conn) closeAfterDelay() {
 	// interval passes or a certain size has been reached.
 	discarded := 0
 	var buf [framing.MaximumSegmentLength]byte
-	for discarded < int(toDiscard) {
+	for discarded < int(c.closeDelayBytes) {
 		n, err := c.conn.Read(buf[:])
 		if err != nil {
 			return
@@ -324,9 +327,6 @@ func (c *Obfs4Conn) ServerHandshake() error {
 	err := c.serverHandshake(c.listener.nodeID, c.listener.keyPair)
 	c.listener = nil
 	if err != nil {
-		// XXX: Maybe make the timeout period deterministic, since random
-		// hangup intervals are also suspicious.  An ok value would be someting
-		// like the Nginx client_header_timeout (60s).
 		c.closeAfterDelay()
 	}
 
@@ -544,6 +544,9 @@ func (l *Obfs4Listener) Accept() (net.Conn, error) {
 		c.Close()
 		return nil, err
 	}
+	cObfs.startTime = time.Now()
+	cObfs.closeDelayBytes = cObfs.lenProbDist.rng.Intn(maxCloseDelayBytes)
+	cObfs.closeDelay = cObfs.lenProbDist.rng.Intn(maxCloseDelay)
 
 	return cObfs, nil
 }
