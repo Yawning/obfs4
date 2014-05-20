@@ -316,17 +316,28 @@ func ptGetStateDir() (dir string, err error) {
 	return
 }
 
-func ptInitializeLogging() {
-	dir, err := ptGetStateDir()
-	if err != nil || dir == "" {
-		return
-	}
+type discardWriter struct{}
 
-	f, err := os.OpenFile(path.Join(dir, obfs4LogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		log.Fatalf("[ERROR] Failed to open log file: %s", err)
+func (d discardWriter) Write(p []byte) (n int, err error) {
+	return len(p), nil
+}
+
+func ptInitializeLogging(enable bool) {
+	if enable {
+		dir, err := ptGetStateDir()
+		if err != nil || dir == "" {
+			return
+		}
+
+		f, err := os.OpenFile(path.Join(dir, obfs4LogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			log.Fatalf("[ERROR] Failed to open log file: %s", err)
+		}
+		log.SetOutput(f)
+	} else {
+		var d discardWriter
+		log.SetOutput(d)
 	}
-	log.SetOutput(f)
 }
 
 func generateServerParams(id string) {
@@ -371,7 +382,8 @@ func generateServerParams(id string) {
 
 func main() {
 	// Some command line args.
-	genParams := flag.String("gen", "", "Generate server params given a bridge fingerprint.")
+	genParams := flag.String("genServerParams", "", "Generate server params given a bridge fingerprint.")
+	doLogging := flag.Bool("enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
 	flag.Parse()
 	if *genParams != "" {
 		generateServerParams(*genParams)
@@ -379,7 +391,7 @@ func main() {
 	}
 
 	// Initialize pt logging.
-	ptInitializeLogging()
+	ptInitializeLogging(*doLogging)
 
 	// Go through the pt protocol and initialize client or server mode.
 	launched := false
@@ -393,6 +405,9 @@ func main() {
 	}
 
 	log.Println("[INFO] obfs4proxy - Launched and listening")
+	defer func() {
+		log.Println("[INFO] obfs4proxy - Terminated")
+	}()
 
 	// Handle termination notification.
 	numHandlers := 0
