@@ -89,7 +89,7 @@
     2. The client sends a handshake request to the server where:
 
            X' = Elligator 2 representative of X (32 bytes)
-           P_C = Random padding [87, 1384] bytes long
+           P_C = Random padding [85, 1384] bytes long
            M_C = HMAC-SHA256-128(B | NODEID, X')
            E = String representation of the number of hours since the UNIX
                epoch
@@ -228,7 +228,7 @@
    part of the serverResponse if it always sends the frame immediately
    following the serverResponse body.  If implementations chose to do this,
    the TYPE_PRNG_SEED frame MUST have 0 bytes of padding, and P_S MUST
-   consist of [0,1297] bytes of random padding.
+   consist of [0,1299] bytes of random padding.
  
 7. References
 
