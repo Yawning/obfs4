@@ -89,7 +89,7 @@
     2. The client sends a handshake request to the server where:
 
            X' = Elligator 2 representative of X (32 bytes)
-           P_C = Random padding [87, 1396] bytes long
+           P_C = Random padding [87, 1384] bytes long
            M_C = HMAC-SHA256-128(B | NODEID, X')
            E = String representation of the number of hours since the UNIX
                epoch
@@ -145,7 +145,7 @@
 
            Y' = Elligator 2 Representative of Y (32 bytes)
            AUTH = The ntor authentication tag (32 bytes)
-           P_S = Random padding [0, 1364] bytes long
+           P_S = Random padding [0, 1352] bytes long
            M_S = HMAC-SHA256-128(B | NODEID, Y')
            E' = E from the client request
            MAC_S = HMAC-SHA256-128(B | NODEID, Y' | AUTH | P_S | M_S | E')
@@ -193,7 +193,7 @@
    be 0 in which case all the remaining data is authenticated and decrypted,
    but ignored.
 
-   The maximum allowed frame length is 1460 bytes, which allows up to 1439
+   The maximum allowed frame length is 1448 bytes, which allows up to 1427
    bytes of useful payload to be transmitted per "frame".
 
    If unsealing a secretbox ever fails (due to a Tag mismatch), implementations
@@ -228,7 +228,7 @@
    part of the serverResponse if it always sends the frame immediately
    following the serverResponse body.  If implementations chose to do this,
    the TYPE_PRNG_SEED frame MUST have 0 bytes of padding, and P_S MUST
-   consist of [0,1309] bytes of random padding.
+   consist of [0,1297] bytes of random padding.
  
 7. References
 

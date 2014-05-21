@@ -70,7 +70,7 @@ import (
 const (
 	// MaximumSegmentLength is the length of the largest possible segment
 	// including overhead.
-	MaximumSegmentLength = 1500 - 40
+	MaximumSegmentLength = 1500 - (40 + 12)
 
 	// FrameOverhead is the length of the framing overhead.
 	FrameOverhead = lengthLength + secretbox.Overhead
