@@ -110,7 +110,7 @@ func copyLoop(a, b net.Conn) {
 	wg.Wait()
 }
 
-func serverHandler(conn net.Conn, info *pt.ServerInfo) error {
+func serverHandler(conn *obfs4.Obfs4Conn, info *pt.ServerInfo) error {
 	defer conn.Close()
 	defer logAndRecover()
 
@@ -120,8 +120,7 @@ func serverHandler(conn net.Conn, info *pt.ServerInfo) error {
 	}()
 
 	// Handshake with the client.
-	oConn, _ := conn.(*obfs4.Obfs4Conn)
-	err := oConn.ServerHandshake()
+	err := conn.ServerHandshake()
 	if err != nil {
 		log.Printf("[WARN] server: Handshake failed: %s", err)
 		return err
@@ -139,10 +138,10 @@ func serverHandler(conn net.Conn, info *pt.ServerInfo) error {
 	return nil
 }
 
-func serverAcceptLoop(ln net.Listener, info *pt.ServerInfo) error {
+func serverAcceptLoop(ln *obfs4.Obfs4Listener, info *pt.ServerInfo) error {
 	defer ln.Close()
 	for {
-		conn, err := ln.Accept()
+		conn, err := ln.AcceptObfs4()
 		if err != nil {
 			if e, ok := err.(net.Error); ok && !e.Temporary() {
 				return err
@@ -183,7 +182,7 @@ func serverSetup() bool {
 			}
 
 			// Initialize the listener.
-			ln, err := obfs4.Listen("tcp", bindaddr.Addr.String(), nodeID,
+			ln, err := obfs4.ListenObfs4("tcp", bindaddr.Addr.String(), nodeID,
 				privateKey, seed)
 			if err != nil {
 				pt.SmethodError(bindaddr.MethodName, err.Error())
@@ -191,10 +190,9 @@ func serverSetup() bool {
 			}
 
 			// Report the SMETHOD including the parameters.
-			oLn, _ := ln.(*obfs4.Obfs4Listener)
 			args := pt.Args{}
 			args.Add("node-id", nodeID)
-			args.Add("public-key", oLn.PublicKey())
+			args.Add("public-key", ln.PublicKey())
 			go serverAcceptLoop(ln, &ptServerInfo)
 			pt.SmethodArgs(bindaddr.MethodName, ln.Addr(), args)
 			ptListeners = append(ptListeners, ln)
@@ -231,7 +229,7 @@ func clientHandler(conn *pt.SocksConn) error {
 	}()
 
 	defer logAndRecover()
-	remote, err := obfs4.Dial("tcp", conn.Req.Target, nodeID, publicKey)
+	remote, err := obfs4.DialObfs4("tcp", conn.Req.Target, nodeID, publicKey)
 	if err != nil {
 		log.Printf("[ERROR] client: Handshake failed: %s", err)
 		conn.Reject()

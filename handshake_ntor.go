@@ -63,10 +63,22 @@ const (
 	inlineSeedFrameLength = framing.FrameOverhead + packetOverhead + seedPacketPayloadLength
 )
 
+// ErrMarkNotFoundYet is the error returned when the obfs4 handshake is
+// incomplete and requires more data to continue.  This error is non-fatal and
+// is the equivalent to EAGAIN/EWOULDBLOCK.
 var ErrMarkNotFoundYet = errors.New("handshake: M_[C,S] not found yet")
+
+// ErrInvalidHandshake is the error returned when the obfs4 handshake fails due
+// to the peer not sending the correct mark.  This error is fatal and the
+// connection MUST be dropped.
 var ErrInvalidHandshake = errors.New("handshake: Failed to find M_[C,S]")
+
+// ErrNtorFailed is the error returned when the ntor handshake fails.  This
+// error is fatal and the connection MUST be dropped.
 var ErrNtorFailed = errors.New("handshake: ntor handshake failure")
 
+// InvalidMacError is the error returned when the handshake MACs do not match.
+// This error is fatal and the connection MUST be dropped.
 type InvalidMacError struct {
 	Derived  []byte
 	Received []byte
@@ -77,6 +89,8 @@ func (e *InvalidMacError) Error() string {
 		hex.EncodeToString(e.Derived), hex.EncodeToString(e.Received))
 }
 
+// InvalidAuthError is the error returned when the ntor AUTH tags do not match.
+// This error is fatal and the connection MUST be dropped.
 type InvalidAuthError struct {
 	Derived  *ntor.Auth
 	Received *ntor.Auth
@@ -363,7 +377,7 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 	if endPos > maxPos {
 		endPos = maxPos
 	}
-	if endPos - startPos < markLength + macLength {
+	if endPos-startPos < markLength+macLength {
 		return -1
 	}
 
@@ -389,7 +403,7 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 	}
 
 	// Ensure that there is enough trailing data for the MAC.
-	if startPos + pos + markLength + macLength > endPos {
+	if startPos+pos+markLength+macLength > endPos {
 		return -1
 	}
 

@@ -25,7 +25,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-// Package obfs4 implements the obfs4 protocol.
+// Package obfs4 implements the obfs4 protocol.  For the most part, obfs4
+// connections are exposed via the net.Conn and net.Listener interface, though
+// accepting connections as a server requires calling ServerHandshake on the
+// conn to finish connection establishment.
 package obfs4
 
 import (
@@ -46,7 +49,7 @@ const (
 	connectionTimeout = time.Duration(30) * time.Second
 
 	maxCloseDelayBytes = framing.MaximumSegmentLength * 5
-	maxCloseDelay  = 60
+	maxCloseDelay      = 60
 )
 
 type connState int
@@ -75,7 +78,7 @@ type Obfs4Conn struct {
 	isServer bool
 
 	// Server side state.
-	listener *Obfs4Listener
+	listener  *Obfs4Listener
 	startTime time.Time
 }
 
@@ -116,7 +119,7 @@ func (c *Obfs4Conn) closeAfterDelay() {
 	// I-it's not like I w-wanna handshake with you or anything.  B-b-baka!
 	defer c.conn.Close()
 
-	delay := time.Duration(c.listener.closeDelay) * time.Second + connectionTimeout
+	delay := time.Duration(c.listener.closeDelay)*time.Second + connectionTimeout
 	deadline := c.startTime.Add(delay)
 	if time.Now().After(deadline) {
 		return
@@ -302,14 +305,22 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 	return
 }
 
+// CanHandshake queries the connection state to see if it is appropriate to
+// call ServerHandshake to complete connection establishment.
 func (c *Obfs4Conn) CanHandshake() bool {
 	return c.state == stateInit
 }
 
+// CanReadWrite queries the connection state to see if it is possible to read
+// and write data.
 func (c *Obfs4Conn) CanReadWrite() bool {
 	return c.state == stateEstablished
 }
 
+// ServerHandshake completes the server side of the obfs4 handshake.  Servers
+// are required to call this after accepting a connection.  ServerHandshake
+// will treat errors encountered during the handshake as fatal and drop the
+// connection before returning.
 func (c *Obfs4Conn) ServerHandshake() error {
 	// Handshakes when already established are a no-op.
 	if c.CanReadWrite() {
@@ -332,6 +343,7 @@ func (c *Obfs4Conn) ServerHandshake() error {
 	return err
 }
 
+// Read implements the net.Conn Read method.
 func (c *Obfs4Conn) Read(b []byte) (n int, err error) {
 	if !c.CanReadWrite() {
 		return 0, syscall.EINVAL
@@ -350,6 +362,7 @@ func (c *Obfs4Conn) Read(b []byte) (n int, err error) {
 	return
 }
 
+// WriteTo implements the io.WriterTo WriteTo method.
 func (c *Obfs4Conn) WriteTo(w io.Writer) (n int64, err error) {
 	if !c.CanReadWrite() {
 		return 0, syscall.EINVAL
@@ -386,6 +399,10 @@ func (c *Obfs4Conn) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
+// Write implements the net.Conn Write method.  The obfs4 lengt obfuscation is
+// done based on the amount of data passed to Write (each call to Write results
+// in up to 2 frames of padding).  Passing excessively short buffers to Write
+// will result in significant overhead.
 func (c *Obfs4Conn) Write(b []byte) (n int, err error) {
 	if !c.CanReadWrite() {
 		return 0, syscall.EINVAL
@@ -439,6 +456,7 @@ func (c *Obfs4Conn) Write(b []byte) (n int, err error) {
 	return
 }
 
+// Close closes the connection.
 func (c *Obfs4Conn) Close() error {
 	if c.conn == nil {
 		return syscall.EINVAL
@@ -449,6 +467,7 @@ func (c *Obfs4Conn) Close() error {
 	return c.conn.Close()
 }
 
+// LocalAddr returns the local network address.
 func (c *Obfs4Conn) LocalAddr() net.Addr {
 	if c.state == stateClosed {
 		return nil
@@ -457,6 +476,7 @@ func (c *Obfs4Conn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
+// RemoteAddr returns the remote network address.
 func (c *Obfs4Conn) RemoteAddr() net.Addr {
 	if c.state == stateClosed {
 		return nil
@@ -465,10 +485,13 @@ func (c *Obfs4Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+// SetDeadline is a convoluted way to get syscall.ENOTSUP.
 func (c *Obfs4Conn) SetDeadline(t time.Time) error {
 	return syscall.ENOTSUP
 }
 
+// SetReadDeadline implements the net.Conn SetReadDeadline method.  Connections
+// must be in the established state (CanReadWrite).
 func (c *Obfs4Conn) SetReadDeadline(t time.Time) error {
 	if !c.CanReadWrite() {
 		return syscall.EINVAL
@@ -477,11 +500,15 @@ func (c *Obfs4Conn) SetReadDeadline(t time.Time) error {
 	return c.conn.SetReadDeadline(t)
 }
 
+// SetWriteDeadline is a convoluted way to get syscall.ENOTSUP.
 func (c *Obfs4Conn) SetWriteDeadline(t time.Time) error {
 	return syscall.ENOTSUP
 }
 
-func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
+// DialObfs4 connects to the remote address on the network, and handshakes with
+// the peer's obfs4 Node ID and Identity Public Key.  nodeID and publicKey are
+// expected as strings containing the Base64 encoded values.
+func DialObfs4(network, address, nodeID, publicKey string) (*Obfs4Conn, error) {
 	// Decode the node_id/public_key.
 	pub, err := ntor.PublicKeyFromBase64(publicKey)
 	if err != nil {
@@ -516,21 +543,36 @@ func Dial(network, address, nodeID, publicKey string) (net.Conn, error) {
 	return c, nil
 }
 
-// Obfs4Listener a obfs4 network listener.  Servers should use variables of
-// type Listener instead of assuming obfs4.
+// Obfs4Listener is the implementation of the net.Listener interface for obfs4
+// connections.
 type Obfs4Listener struct {
 	listener net.Listener
 
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
 
-	seed    *DrbgSeed
+	seed *DrbgSeed
 
 	closeDelayBytes int
-	closeDelay int
+	closeDelay      int
 }
 
+// Accept implements the Accept method of the net.Listener interface; it waits
+// for the next call and returns a generic net.Conn.  Callers are responsible
+// for completing the handshake by calling Obfs4Conn.ServerHandshake().
 func (l *Obfs4Listener) Accept() (net.Conn, error) {
+	conn, err := l.AcceptObfs4()
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+// AcceptObfs4 accepts the next incoming call and returns a new connection.
+// Callers are responsible for completing the handshake by calling
+// Obfs4Conn.ServerHandshake().
+func (l *Obfs4Listener) AcceptObfs4() (*Obfs4Conn, error) {
 	// Accept a connection.
 	c, err := l.listener.Accept()
 	if err != nil {
@@ -552,14 +594,19 @@ func (l *Obfs4Listener) Accept() (net.Conn, error) {
 	return cObfs, nil
 }
 
+// Close stops listening on the Obfs4 endpoint.  Already Accepted connections
+// are not closed.
 func (l *Obfs4Listener) Close() error {
 	return l.listener.Close()
 }
 
+// Addr returns the listener's network address.
 func (l *Obfs4Listener) Addr() net.Addr {
 	return l.listener.Addr()
 }
 
+// PublicKey returns the listener's Identity Public Key, a Base64 encoded
+// obfs4.ntor.PublicKey.
 func (l *Obfs4Listener) PublicKey() string {
 	if l.keyPair == nil {
 		return ""
@@ -568,7 +615,19 @@ func (l *Obfs4Listener) PublicKey() string {
 	return l.keyPair.Public().Base64()
 }
 
-func Listen(network, laddr, nodeID, privateKey, seed string) (net.Listener, error) {
+// NodeID returns the listener's NodeID, a Base64 encoded obfs4.ntor.NodeID.
+func (l *Obfs4Listener) NodeID() string {
+	if l.nodeID == nil {
+		return ""
+	}
+
+	return l.nodeID.Base64()
+}
+
+// ListenObfs4 annnounces on the network and address, and returns and
+// Obfs4Listener. nodeId, privateKey and seed are expected as strings
+// containing the Base64 encoded values.
+func ListenObfs4(network, laddr, nodeID, privateKey, seed string) (*Obfs4Listener, error) {
 	var err error
 
 	// Decode node_id/private_key.
