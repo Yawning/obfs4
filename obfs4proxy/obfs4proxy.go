@@ -50,6 +50,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -68,6 +69,7 @@ const (
 	obfs4LogFile = "obfs4proxy.log"
 )
 
+var enableLogging bool
 var unsafeLogging bool
 var ptListeners []net.Listener
 
@@ -170,6 +172,8 @@ func serverSetup() bool {
 	if err != nil {
 		return launch
 	}
+
+	ptInitializeLogging(ptServerInfo.StateLocation)
 
 	for _, bindaddr := range ptServerInfo.Bindaddrs {
 		switch bindaddr.MethodName {
@@ -288,6 +292,8 @@ func clientSetup() bool {
 		return launch
 	}
 
+	ptInitializeLogging(ptClientInfo.StateLocation)
+
 	for _, methodName := range ptClientInfo.MethodNames {
 		switch methodName {
 		case obfs4Method:
@@ -309,51 +315,15 @@ func clientSetup() bool {
 	return launch
 }
 
-func ptIsClient() bool {
-	env := os.Getenv("TOR_PT_CLIENT_TRANSPORTS")
-	return env != ""
-}
-
-func ptIsServer() bool {
-	env := os.Getenv("TOR_PT_SERVER_TRANSPORTS")
-	return env != ""
-}
-
-func ptGetStateDir() (dir string, err error) {
-	dir = os.Getenv("TOR_PT_STATE_LOCATION")
-	if dir == "" {
-		return
-	}
-
-	err = os.MkdirAll(dir, 0755)
-	if err != nil {
-		log.Fatalf("[ERROR] Failed to create path: %s", err)
-	}
-
-	return
-}
-
-type discardWriter struct{}
-
-func (d discardWriter) Write(p []byte) (n int, err error) {
-	return len(p), nil
-}
-
-func ptInitializeLogging(enable bool) {
-	if enable {
-		dir, err := ptGetStateDir()
-		if err != nil || dir == "" {
-			return
-		}
-
+func ptInitializeLogging(dir string) {
+	if enableLogging {
 		f, err := os.OpenFile(path.Join(dir, obfs4LogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			log.Fatalf("[ERROR] Failed to open log file: %s", err)
 		}
 		log.SetOutput(f)
 	} else {
-		var d discardWriter
-		log.SetOutput(d)
+		log.SetOutput(ioutil.Discard)
 	}
 }
 
@@ -400,7 +370,7 @@ func generateServerParams(id string) {
 func main() {
 	// Some command line args.
 	genParams := flag.String("genServerParams", "", "Generate server params given a bridge fingerprint.")
-	doLogging := flag.Bool("enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
+	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
 	if *genParams != "" {
@@ -408,14 +378,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Initialize pt logging.
-	ptInitializeLogging(*doLogging)
-
 	// Go through the pt protocol and initialize client or server mode.
 	launched := false
-	if ptIsClient() {
+	if pt.IsClient() {
 		launched = clientSetup()
-	} else if ptIsServer() {
+	} else if pt.IsServer() {
 		launched = serverSetup()
 	}
 	if !launched {
