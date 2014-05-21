@@ -68,42 +68,43 @@ const (
 	obfs4LogFile = "obfs4proxy.log"
 )
 
+var unsafeLogging bool
 var ptListeners []net.Listener
 
 // When a connection handler starts, +1 is written to this channel; when it
 // ends, -1 is written.
 var handlerChan = make(chan int)
 
-func logAndRecover() {
+func logAndRecover(conn *obfs4.Obfs4Conn) {
 	if err := recover(); err != nil {
-		log.Println("[ERROR] Panic:", err)
+		log.Printf("[ERROR] %p: Panic: %s", conn, err)
 	}
 }
 
-func copyLoop(a, b net.Conn) {
+func copyLoop(a net.Conn, b *obfs4.Obfs4Conn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
-		defer logAndRecover()
+		defer logAndRecover(b)
 		defer wg.Done()
 		defer b.Close()
 		defer a.Close()
 
 		_, err := io.Copy(b, a)
 		if err != nil {
-			log.Printf("[WARN] Connection closed: %s", err)
+			log.Printf("[WARN] copyLoop: %p: Connection closed: %s", b, err)
 		}
 	}()
 	go func() {
-		defer logAndRecover()
+		defer logAndRecover(b)
 		defer wg.Done()
 		defer a.Close()
 		defer b.Close()
 
 		_, err := io.Copy(a, b)
 		if err != nil {
-			log.Printf("[WARN] Connection closed: %s", err)
+			log.Printf("[WARN] copyLoop: %p: Connection closed: %s", b, err)
 		}
 	}()
 
@@ -112,23 +113,32 @@ func copyLoop(a, b net.Conn) {
 
 func serverHandler(conn *obfs4.Obfs4Conn, info *pt.ServerInfo) error {
 	defer conn.Close()
-	defer logAndRecover()
+	defer logAndRecover(conn)
 
 	handlerChan <- 1
 	defer func() {
 		handlerChan <- -1
 	}()
 
+	var addr string
+	if unsafeLogging {
+		addr = conn.RemoteAddr().String()
+	} else {
+		addr = "[scrubbed]"
+	}
+
+	log.Printf("[INFO] server: %p: New connection from %s", conn, addr)
+
 	// Handshake with the client.
 	err := conn.ServerHandshake()
 	if err != nil {
-		log.Printf("[WARN] server: Handshake failed: %s", err)
+		log.Printf("[WARN] server: %p: Handshake failed: %s", conn, err)
 		return err
 	}
 
 	or, err := pt.DialOr(info, conn.RemoteAddr().String(), obfs4Method)
 	if err != nil {
-		log.Printf("[ERROR] server: DialOr failed: %s", err)
+		log.Printf("[ERROR] server: %p: DialOr failed: %s", conn, err)
 		return err
 	}
 	defer or.Close()
@@ -209,6 +219,15 @@ func serverSetup() bool {
 func clientHandler(conn *pt.SocksConn) error {
 	defer conn.Close()
 
+	var addr string
+	if unsafeLogging {
+		addr = conn.Req.Target
+	} else {
+		addr = "[scrubbed]"
+	}
+
+	log.Printf("[INFO] client: New connection to %s", addr)
+
 	// Extract the peer's node ID and public key.
 	nodeID, ok := conn.Req.Args.Get("node-id")
 	if !ok {
@@ -228,10 +247,10 @@ func clientHandler(conn *pt.SocksConn) error {
 		handlerChan <- -1
 	}()
 
-	defer logAndRecover()
+	defer logAndRecover(nil)
 	remote, err := obfs4.DialObfs4("tcp", conn.Req.Target, nodeID, publicKey)
 	if err != nil {
-		log.Printf("[ERROR] client: Handshake failed: %s", err)
+		log.Printf("[ERROR] client: %p: Handshake failed: %s", remote, err)
 		conn.Reject()
 		return err
 	}
@@ -382,6 +401,7 @@ func main() {
 	// Some command line args.
 	genParams := flag.String("genServerParams", "", "Generate server params given a bridge fingerprint.")
 	doLogging := flag.Bool("enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
+	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
 	if *genParams != "" {
 		generateServerParams(*genParams)
