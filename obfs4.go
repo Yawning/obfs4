@@ -247,7 +247,7 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 		c.receiveBuffer.Write(hsBuf[:n])
 
 		var seed []byte
-		seed, err = hs.parseClientHandshake(c.receiveBuffer.Bytes())
+		seed, err = hs.parseClientHandshake(c.listener.filter, c.receiveBuffer.Bytes())
 		if err == ErrMarkNotFoundYet {
 			continue
 		} else if err != nil {
@@ -548,6 +548,8 @@ func DialObfs4(network, address, nodeID, publicKey string) (*Obfs4Conn, error) {
 type Obfs4Listener struct {
 	listener net.Listener
 
+	filter *replayFilter
+
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
 
@@ -641,6 +643,11 @@ func ListenObfs4(network, laddr, nodeID, privateKey, seed string) (*Obfs4Listene
 		return nil, err
 	}
 	l.seed, err = DrbgSeedFromBase64(seed)
+	if err != nil {
+		return nil, err
+	}
+
+	l.filter, err = newReplayFilter()
 	if err != nil {
 		return nil, err
 	}

@@ -45,6 +45,7 @@ func TestHandshakeNtor(t *testing.T) {
 		t.Fatal("newClientHandshake failed:", err)
 	}
 	serverHs := newServerHandshake(nodeID, idKeypair)
+	serverFilter, _ := newReplayFilter()
 
 	// Generate what the client will send to the server.
 	cToS, err := clientHs.generateHandshake()
@@ -53,7 +54,7 @@ func TestHandshakeNtor(t *testing.T) {
 	}
 
 	// Parse the client handshake message.
-	serverSeed, err := serverHs.parseClientHandshake(cToS)
+	serverSeed, err := serverHs.parseClientHandshake(serverFilter, cToS)
 	if err != nil {
 		t.Fatal("serverHandshake.parseClientHandshake() failed", err)
 	}

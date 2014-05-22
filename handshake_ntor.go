@@ -73,6 +73,11 @@ var ErrMarkNotFoundYet = errors.New("handshake: M_[C,S] not found yet")
 // connection MUST be dropped.
 var ErrInvalidHandshake = errors.New("handshake: Failed to find M_[C,S]")
 
+// ErrReplayedHandshake is the error returned when the obfs4 handshake fails
+// due it being replayed.  This error is fatal and the connection MUST be
+// dropped.
+var ErrReplayedHandshake = errors.New("handshake: Replay detected")
+
 // ErrNtorFailed is the error returned when the ntor handshake fails.  This
 // error is fatal and the connection MUST be dropped.
 var ErrNtorFailed = errors.New("handshake: ntor handshake failure")
@@ -242,7 +247,7 @@ func newServerHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.Keypair) *serv
 	return hs
 }
 
-func (hs *serverHandshake) parseClientHandshake(resp []byte) ([]byte, error) {
+func (hs *serverHandshake) parseClientHandshake(filter *replayFilter, resp []byte) ([]byte, error) {
 	// No point in examining the data unless the miminum plausible response has
 	// been received.
 	if clientMinHandshakeLength > len(resp) {
@@ -281,14 +286,19 @@ func (hs *serverHandshake) parseClientHandshake(resp []byte) ([]byte, error) {
 		macCmp := hs.mac.Sum(nil)[:macLength]
 		macRx := resp[pos+markLength : pos+markLength+macLength]
 		if hmac.Equal(macCmp, macRx) {
+			// Ensure that this handshake has not been seen previously.
+			if filter.testAndSet(time.Now().Unix(), macRx) {
+				// The client either happened to generate exactly the same
+				// session key and padding, or someone is replaying a previous
+				// handshake.  In either case, fuck them.
+				return nil, ErrReplayedHandshake
+			}
+
 			macFound = true
 			hs.epochHour = epochHour
 
-			// In theory, we should always evaluate all 3 MACs, but at this
-			// point we are reasonably confident that the client knows the
-			// correct NodeID/Public key, and if this fails, we just ignore the
-			// client for a random interval and drop the connection anyway.
-			break
+			// We could break out here, but in the name of reducing timing
+			// variation, evaluate all 3 MACs.
 		}
 	}
 	if !macFound {
