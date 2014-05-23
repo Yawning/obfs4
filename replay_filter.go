@@ -78,7 +78,7 @@ func newReplayFilter() (filter *replayFilter, err error) {
 }
 
 // testAndSet queries the filter for buf, adds it if it was not present and
-// returns if it has added the entry or not.
+// returns if it has added the entry or not.  This method is threadsafe.
 func (f *replayFilter) testAndSet(now int64, buf []byte) bool {
 	hash := siphash.Hash(f.key[0], f.key[1], buf)
 
@@ -102,7 +102,8 @@ func (f *replayFilter) testAndSet(now int64, buf []byte) bool {
 }
 
 // compactFilter purges entries that are too old to be relevant.  If the filter
-// is filled to maxFilterCapacity, it will force purge a single entry.
+// is filled to maxFilterCapacity, it will force purge a single entry.  This
+// method is NOT threadsafe.
 func (f *replayFilter) compactFilter(now int64) {
 	e := f.fifo.Front()
 	for e != nil {
@@ -116,8 +117,7 @@ func (f *replayFilter) compactFilter(now int64) {
 				// a lot.  This will eventually self-correct, but "eventually"
 				// could be a long time.  As much as this sucks, jettison the
 				// entire filter.
-				f.filter = make(map[uint64]*filterEntry)
-				f.fifo = list.New()
+				f.reset()
 				return
 			}
 			if deltaT < 3600*2 {
@@ -133,6 +133,12 @@ func (f *replayFilter) compactFilter(now int64) {
 		entry.element = nil
 		e = eNext
 	}
+}
+
+// reset purges the entire filter.  This methoid is NOT threadsafe.
+func (f *replayFilter) reset() {
+	f.filter = make(map[uint64]*filterEntry)
+	f.fifo = list.New()
 }
 
 /* vim :set ts=4 sw=4 sts=4 noet : */

@@ -58,7 +58,7 @@
    obfs4 provides integrity and confidentiality of the underlying traffic,
    and authentication of the server.
 
-3. Notation, Constants and Terminology
+3. Notation and Terminology
 
    All Curve25519 keys and Elligator 2 representatives are transmitted in the
    Little Endian representation, for ease of integration with current
@@ -81,6 +81,71 @@
    The server distributes the public component of the identity key (B) and
    NODEID to the client via an out-of-band mechanism.
 
+   Data sent as part of the handshake are padded to random lengths to attempt to
+   obfuscate the initial flow signature.  The constants used are as follows:
+
+     MaximumHandshakeLength = 8192
+
+       Maximum size of a handshake request or response, including padding.
+
+     MarkLength = 16
+
+       Length of M_C/M_S (A HMAC-SHA256-128 digest).
+
+     MACLength = 16
+
+       Length of MAC_C/MAC_S (A HMAC-SHA256-128 digest).
+
+     RepresentativeLength = 32
+
+       Length of a Elligator 2 representative of a Curve25519 public key.
+
+     AuthLength = 32
+
+       Length of the ntor AUTH tag (A HMAC-SHA256 digest).
+
+     InlineSeedFrameLength = 53
+
+       Length of a unpadded TYPE_PRNG_SEED frame.
+
+     ServerHandshakeLength = 96
+
+       The length of the non-padding data in a handshake response.
+
+       RepresentativeLength + AuthLength + MarkLength + MACLength
+
+     ServerMaxPadLength = 8096
+
+       The maximum amount of padding in a handshake response.
+
+       MaximumHandshakeLength - ServerHandshakeLength
+
+     ServerMinPadLength = InlineSeedFrameLength
+
+       The minimum amount of padding in a handshake response.
+
+     ClientHandshakeLength = 64
+
+       The length of the non-padding data in a handshake request.
+
+       RepresentativeLength + MarkLength + MACLength
+
+     ClientMinPadLength = 85
+
+       The minimum amount of padding in a handshake request.
+
+       (ServerHandshakeLength + ServerMinPadLength) - ClientHandshakeLength
+
+     ClientMaxPadLength = 8128
+
+       The maximum amount of padding in a handshake request.
+
+       MaximumHandshakeLength - ClientHandshakeLength
+
+   The amount of padding is chosen such that the smallest possible request and
+   response (requests and responses with the minimum amount of padding) are
+   equal in size.  For details on the InlineSeedFrameLength, see section 7.
+
    The client handshake process is as follows.
 
     1. The client generates an ephemeral Curve25519 keypair X,x and an
@@ -89,7 +154,7 @@
     2. The client sends a handshake request to the server where:
 
            X' = Elligator 2 representative of X (32 bytes)
-           P_C = Random padding [85, 1384] bytes long
+           P_C = Random padding [ClientMinPadLength, ClientMaxPadLength] bytes
            M_C = HMAC-SHA256-128(B | NODEID, X')
            E = String representation of the number of hours since the UNIX
                epoch
@@ -145,7 +210,7 @@
 
            Y' = Elligator 2 Representative of Y (32 bytes)
            AUTH = The ntor authentication tag (32 bytes)
-           P_S = Random padding [0, 1352] bytes long
+           P_S = Random padding [ServerMinPadLength, ServerMaxPadLength] bytes
            M_S = HMAC-SHA256-128(B | NODEID, Y')
            E' = E from the client request
            MAC_S = HMAC-SHA256-128(B | NODEID, Y' | AUTH | P_S | M_S | E')
@@ -228,7 +293,9 @@
    part of the serverResponse if it always sends the frame immediately
    following the serverResponse body.  If implementations chose to do this,
    the TYPE_PRNG_SEED frame MUST have 0 bytes of padding, and P_S MUST
-   consist of [0,1299] bytes of random padding.
+   be generated with a ServerMinPadLength of 0 (P_S consists of [0,8096]
+   bytes of random data).  The calculation of ClientMinPadLength however is
+   unchanged (P_C still consists of [85,8128] bytes of random data).
  
 7. References
 

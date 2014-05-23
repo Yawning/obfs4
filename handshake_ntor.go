@@ -44,18 +44,18 @@ import (
 )
 
 const (
+	maxHandshakeLength = 8192
+
 	clientMinPadLength = (serverMinHandshakeLength + inlineSeedFrameLength) -
 		clientMinHandshakeLength
-	clientMaxPadLength       = framing.MaximumSegmentLength - clientMinHandshakeLength
+	clientMaxPadLength       = maxHandshakeLength - clientMinHandshakeLength
 	clientMinHandshakeLength = ntor.RepresentativeLength + markLength + macLength
-	clientMaxHandshakeLength = framing.MaximumSegmentLength
 
 	serverMinPadLength = 0
-	serverMaxPadLength = framing.MaximumSegmentLength - (serverMinHandshakeLength +
+	serverMaxPadLength = maxHandshakeLength - (serverMinHandshakeLength +
 		inlineSeedFrameLength)
 	serverMinHandshakeLength = ntor.RepresentativeLength + ntor.AuthLength +
 		markLength + macLength
-	serverMaxHandshakeLength = framing.MaximumSegmentLength
 
 	markLength = sha256.Size / 2
 	macLength  = sha256.Size / 2
@@ -113,7 +113,8 @@ type clientHandshake struct {
 	serverIdentity *ntor.PublicKey
 	epochHour      []byte
 
-	mac hash.Hash
+	padLen int
+	mac    hash.Hash
 
 	serverRepresentative *ntor.Representative
 	serverAuth           *ntor.Auth
@@ -130,6 +131,7 @@ func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey) (*c
 	}
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
+	hs.padLen = randRange(clientMinPadLength, clientMaxPadLength)
 	hs.mac = hmac.New(sha256.New, append(hs.serverIdentity.Bytes()[:], hs.nodeID.Bytes()[:]...))
 
 	return hs, nil
@@ -151,7 +153,7 @@ func (hs *clientHandshake) generateHandshake() ([]byte, error) {
 	//    epoch.
 
 	// Generate the padding
-	pad, err := makePad(clientMinPadLength, clientMaxPadLength)
+	pad, err := makePad(hs.padLen)
 	if err != nil {
 		return nil, err
 	}
@@ -193,9 +195,9 @@ func (hs *clientHandshake) parseServerHandshake(resp []byte) (int, []byte, error
 
 	// Attempt to find the mark + MAC.
 	pos := findMarkMac(hs.serverMark, resp, ntor.RepresentativeLength+ntor.AuthLength+serverMinPadLength,
-		serverMaxHandshakeLength, false)
+		maxHandshakeLength, false)
 	if pos == -1 {
-		if len(resp) >= serverMaxHandshakeLength {
+		if len(resp) >= maxHandshakeLength {
 			return 0, nil, ErrInvalidHandshake
 		}
 		return 0, nil, ErrMarkNotFoundYet
@@ -232,7 +234,8 @@ type serverHandshake struct {
 	epochHour      []byte
 	serverAuth     *ntor.Auth
 
-	mac hash.Hash
+	padLen int
+	mac    hash.Hash
 
 	clientRepresentative *ntor.Representative
 	clientMark           []byte
@@ -242,6 +245,7 @@ func newServerHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.Keypair) *serv
 	hs := new(serverHandshake)
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
+	hs.padLen = randRange(serverMinPadLength, serverMaxPadLength)
 	hs.mac = hmac.New(sha256.New, append(hs.serverIdentity.Public().Bytes()[:], hs.nodeID.Bytes()[:]...))
 
 	return hs
@@ -267,9 +271,9 @@ func (hs *serverHandshake) parseClientHandshake(filter *replayFilter, resp []byt
 
 	// Attempt to find the mark + MAC.
 	pos := findMarkMac(hs.clientMark, resp, ntor.RepresentativeLength+clientMinPadLength,
-		clientMaxHandshakeLength, true)
+		maxHandshakeLength, true)
 	if pos == -1 {
-		if len(resp) >= clientMaxHandshakeLength {
+		if len(resp) >= maxHandshakeLength {
 			return nil, ErrInvalidHandshake
 		}
 		return nil, ErrMarkNotFoundYet
@@ -349,7 +353,7 @@ func (hs *serverHandshake) generateHandshake() ([]byte, error) {
 	//    epoch.
 
 	// Generate the padding
-	pad, err := makePad(serverMinPadLength, serverMaxPadLength)
+	pad, err := makePad(hs.padLen)
 	if err != nil {
 		return nil, err
 	}
@@ -422,8 +426,7 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 	return
 }
 
-func makePad(min, max int) ([]byte, error) {
-	padLen := randRange(min, max)
+func makePad(padLen int) ([]byte, error) {
 	pad := make([]byte, padLen)
 	_, err := rand.Read(pad)
 	if err != nil {

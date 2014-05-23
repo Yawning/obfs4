@@ -48,7 +48,7 @@ const (
 	headerLength      = framing.FrameOverhead + packetOverhead
 	connectionTimeout = time.Duration(30) * time.Second
 
-	maxCloseDelayBytes = framing.MaximumSegmentLength * 5
+	maxCloseDelayBytes = maxHandshakeLength
 	maxCloseDelay      = 60
 )
 
@@ -181,7 +181,7 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 	}
 
 	// Consume the server handshake.
-	var hsBuf [serverMaxHandshakeLength]byte
+	var hsBuf [maxHandshakeLength]byte
 	for {
 		var n int
 		n, err = c.conn.Read(hsBuf[:])
@@ -235,7 +235,7 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 	}
 
 	// Consume the client handshake.
-	var hsBuf [clientMaxHandshakeLength]byte
+	var hsBuf [maxHandshakeLength]byte
 	for {
 		var n int
 		n, err = c.conn.Read(hsBuf[:])
