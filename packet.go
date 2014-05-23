@@ -181,6 +181,9 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 					break
 				}
 				c.lenProbDist.reset(seed)
+				if c.iatProbDist != nil {
+					c.iatProbDist.reset(seed)
+				}
 			}
 		default:
 			// Ignore unrecognised packet types.

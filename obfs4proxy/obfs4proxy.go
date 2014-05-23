@@ -70,6 +70,7 @@ const (
 )
 
 var unsafeLogging bool
+var iatObfuscation bool
 var ptListeners []net.Listener
 
 // When a connection handler starts, +1 is written to this channel; when it
@@ -194,7 +195,7 @@ func serverSetup() bool {
 
 			// Initialize the listener.
 			ln, err := obfs4.ListenObfs4("tcp", bindaddr.Addr.String(), nodeID,
-				privateKey, seed)
+				privateKey, seed, iatObfuscation)
 			if err != nil {
 				pt.SmethodError(bindaddr.MethodName, err.Error())
 				break
@@ -249,7 +250,8 @@ func clientHandler(conn *pt.SocksConn) error {
 	}()
 
 	defer logAndRecover(nil)
-	remote, err := obfs4.DialObfs4("tcp", conn.Req.Target, nodeID, publicKey)
+	remote, err := obfs4.DialObfs4("tcp", conn.Req.Target, nodeID, publicKey,
+		iatObfuscation)
 	if err != nil {
 		log.Printf("[ERROR] client: %p: Handshake failed: %s", remote, err)
 		conn.Reject()
@@ -395,6 +397,7 @@ func main() {
 	// Some command line args.
 	genParams := flag.String("genServerParams", "", "Generate server params given a bridge fingerprint.")
 	doLogging := flag.Bool("enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
+	flag.BoolVar(&iatObfuscation, "iatObfuscation", false, "Enable IAT obufscation (EXPENSIVE)")
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
 	if *genParams != "" {

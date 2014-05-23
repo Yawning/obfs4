@@ -50,6 +50,8 @@ const (
 
 	maxCloseDelayBytes = maxHandshakeLength
 	maxCloseDelay      = 60
+
+	maxIatDelay        = 100
 )
 
 type connState int
@@ -67,6 +69,7 @@ type Obfs4Conn struct {
 	conn net.Conn
 
 	lenProbDist *wDist
+	iatProbDist *wDist
 
 	encoder *framing.Encoder
 	decoder *framing.Decoder
@@ -444,13 +447,38 @@ func (c *Obfs4Conn) Write(b []byte) (n int, err error) {
 		return 0, err
 	}
 
-	// Send the frame(s).
-	_, err = c.conn.Write(frameBuf.Bytes())
-	if err != nil {
-		// Partial writes are fatal because the frame encoder state is advanced
-		// at this point.  It's possible to keep frameBuf around, but fuck it.
-		// Someone that wants write timeouts can change this.
-		return 0, err
+	// Spit frame(s) onto the network.
+	//
+	// Partial writes are fatal because the frame encoder state is advanced
+	// at this point.  It's possible to keep frameBuf around, but fuck it.
+	// Someone that wants write timeouts can change this.
+	if c.iatProbDist != nil {
+		var iatFrame [framing.MaximumSegmentLength]byte
+		for frameBuf.Len() > 0 {
+			iatWrLen := 0
+			iatWrLen, err = frameBuf.Read(iatFrame[:])
+			if err != nil {
+				return 0, err
+			} else if iatWrLen == 0 {
+				panic(fmt.Sprintf("BUG: Write(), iat length was 0"))
+			}
+
+			// Calculate the delay.  The delay resolution is 100 usec, leading
+			// to a maximum delay of 10 msec.
+			iatDelta := time.Duration(c.iatProbDist.sample() * 100)
+
+			// Write then sleep.
+			_, err = c.conn.Write(iatFrame[:iatWrLen])
+			if err != nil {
+				return 0, err
+			}
+		    time.Sleep(iatDelta * time.Microsecond)
+		}
+	} else {
+		_, err = c.conn.Write(frameBuf.Bytes())
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	return
@@ -508,7 +536,7 @@ func (c *Obfs4Conn) SetWriteDeadline(t time.Time) error {
 // DialObfs4 connects to the remote address on the network, and handshakes with
 // the peer's obfs4 Node ID and Identity Public Key.  nodeID and publicKey are
 // expected as strings containing the Base64 encoded values.
-func DialObfs4(network, address, nodeID, publicKey string) (*Obfs4Conn, error) {
+func DialObfs4(network, address, nodeID, publicKey string, iatObfuscation bool) (*Obfs4Conn, error) {
 	// Decode the node_id/public_key.
 	pub, err := ntor.PublicKeyFromBase64(publicKey)
 	if err != nil {
@@ -528,6 +556,9 @@ func DialObfs4(network, address, nodeID, publicKey string) (*Obfs4Conn, error) {
 	// Connect to the peer.
 	c := new(Obfs4Conn)
 	c.lenProbDist = newWDist(seed, 0, framing.MaximumSegmentLength)
+	if iatObfuscation {
+		c.iatProbDist = newWDist(seed, 0, maxIatDelay)
+	}
 	c.conn, err = net.Dial(network, address)
 	if err != nil {
 		return nil, err
@@ -554,6 +585,7 @@ type Obfs4Listener struct {
 	nodeID  *ntor.NodeID
 
 	seed *DrbgSeed
+	iatObfuscation bool
 
 	closeDelayBytes int
 	closeDelay      int
@@ -587,6 +619,9 @@ func (l *Obfs4Listener) AcceptObfs4() (*Obfs4Conn, error) {
 	cObfs.isServer = true
 	cObfs.listener = l
 	cObfs.lenProbDist = newWDist(l.seed, 0, framing.MaximumSegmentLength)
+	if l.iatObfuscation {
+		cObfs.iatProbDist = newWDist(l.seed, 0, maxIatDelay)
+	}
 	if err != nil {
 		c.Close()
 		return nil, err
@@ -629,7 +664,7 @@ func (l *Obfs4Listener) NodeID() string {
 // ListenObfs4 annnounces on the network and address, and returns and
 // Obfs4Listener. nodeId, privateKey and seed are expected as strings
 // containing the Base64 encoded values.
-func ListenObfs4(network, laddr, nodeID, privateKey, seed string) (*Obfs4Listener, error) {
+func ListenObfs4(network, laddr, nodeID, privateKey, seed string, iatObfuscation bool) (*Obfs4Listener, error) {
 	var err error
 
 	// Decode node_id/private_key.
@@ -655,6 +690,7 @@ func ListenObfs4(network, laddr, nodeID, privateKey, seed string) (*Obfs4Listene
 	rng := rand.New(newHashDrbg(l.seed))
 	l.closeDelayBytes = rng.Intn(maxCloseDelayBytes)
 	l.closeDelay = rng.Intn(maxCloseDelay)
+	l.iatObfuscation = iatObfuscation
 
 	// Start up the listener.
 	l.listener, err = net.Listen(network, laddr)
