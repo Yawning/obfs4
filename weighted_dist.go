@@ -28,7 +28,6 @@
 package obfs4
 
 import (
-	csrand "crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -36,6 +35,8 @@ import (
 	"math/rand"
 
 	"github.com/dchest/siphash"
+
+	"github.com/yawning/obfs4/csrand"
 )
 
 // DrbgSeedLength is the length of the hashDrbg seed.
@@ -58,7 +59,7 @@ func (seed *DrbgSeed) Base64() string {
 // NewDrbgSeed returns a DrbgSeed initialized with the runtime CSPRNG.
 func NewDrbgSeed() (seed *DrbgSeed, err error) {
 	seed = new(DrbgSeed)
-	_, err = csrand.Read(seed.Bytes()[:])
+	err = csrand.Bytes(seed.Bytes()[:])
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +161,7 @@ func newWDist(seed *DrbgSeed, min, max int) (w *wDist) {
 func (w *wDist) sample() int {
 	retIdx := 0
 	totalProb := 0.0
-	prob := csRandInstance.Float64()
+	prob := csrand.Float64()
 	for i, bucketProb := range w.buckets {
 		totalProb += bucketProb
 		if prob <= totalProb {

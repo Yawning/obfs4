@@ -51,7 +51,7 @@ const (
 	maxCloseDelayBytes = maxHandshakeLength
 	maxCloseDelay      = 60
 
-	maxIatDelay        = 100
+	maxIatDelay = 100
 )
 
 type connState int
@@ -472,7 +472,7 @@ func (c *Obfs4Conn) Write(b []byte) (n int, err error) {
 			if err != nil {
 				return 0, err
 			}
-		    time.Sleep(iatDelta * time.Microsecond)
+			time.Sleep(iatDelta * time.Microsecond)
 		}
 	} else {
 		_, err = c.conn.Write(frameBuf.Bytes())
@@ -584,7 +584,7 @@ type Obfs4Listener struct {
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
 
-	seed *DrbgSeed
+	seed           *DrbgSeed
 	iatObfuscation bool
 
 	closeDelayBytes int

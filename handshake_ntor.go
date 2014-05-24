@@ -30,7 +30,6 @@ package obfs4
 import (
 	"bytes"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -39,6 +38,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/yawning/obfs4/csrand"
 	"github.com/yawning/obfs4/framing"
 	"github.com/yawning/obfs4/ntor"
 )
@@ -131,7 +131,7 @@ func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey) (*c
 	}
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
-	hs.padLen = randRange(clientMinPadLength, clientMaxPadLength)
+	hs.padLen = csrand.IntRange(clientMinPadLength, clientMaxPadLength)
 	hs.mac = hmac.New(sha256.New, append(hs.serverIdentity.Bytes()[:], hs.nodeID.Bytes()[:]...))
 
 	return hs, nil
@@ -245,7 +245,7 @@ func newServerHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.Keypair) *serv
 	hs := new(serverHandshake)
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
-	hs.padLen = randRange(serverMinPadLength, serverMaxPadLength)
+	hs.padLen = csrand.IntRange(serverMinPadLength, serverMaxPadLength)
 	hs.mac = hmac.New(sha256.New, append(hs.serverIdentity.Public().Bytes()[:], hs.nodeID.Bytes()[:]...))
 
 	return hs
@@ -428,7 +428,7 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 
 func makePad(padLen int) ([]byte, error) {
 	pad := make([]byte, padLen)
-	_, err := rand.Read(pad)
+	err := csrand.Bytes(pad)
 	if err != nil {
 		return nil, err
 	}

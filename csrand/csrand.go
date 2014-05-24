@@ -25,10 +25,16 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package obfs4
+// Package csrand implements the math/rand interface over crypto/rand, along
+// with some utility functions for common random number/byte related tasks.
+//
+// Not all of the convinience routines are replicated, only those that are
+// useful for obfs4.  The CsRand variable provides access to the full math/rand
+// API.
+package csrand
 
 import (
-	csrand "crypto/rand"
+	cryptRand "crypto/rand"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -36,7 +42,9 @@ import (
 
 var (
 	csRandSourceInstance csRandSource
-	csRandInstance       = rand.New(csRandSourceInstance)
+
+	// CsRand is a math/rand instance backed by crypto/rand CSPRNG.
+	CsRand       = rand.New(csRandSourceInstance)
 )
 
 type csRandSource struct {
@@ -44,7 +52,7 @@ type csRandSource struct {
 }
 
 func (r csRandSource) Int63() int64 {
-	ret, err := csrand.Int(csrand.Reader, big.NewInt(int64((1<<63)-1)))
+	ret, err := cryptRand.Int(cryptRand.Reader, big.NewInt(int64((1<<63)-1)))
 	if err != nil {
 		panic(err)
 	}
@@ -56,14 +64,34 @@ func (r csRandSource) Seed(seed int64) {
 	// No-op.
 }
 
-func randRange(min, max int) int {
+// Float64 returns, as a float 64, a pesudo random number in [0.0,1.0).
+func Float64() float64 {
+	return CsRand.Float64()
+}
+
+// IntRange returns a uniformly distributed int [min, max].
+func IntRange(min, max int) int {
 	if max < min {
-		panic(fmt.Sprintf("randRange: min > max (%d, %d)", min, max))
+		panic(fmt.Sprintf("IntRange: min > max (%d, %d)", min, max))
 	}
 
 	r := (max + 1) - min
-	ret := csRandInstance.Intn(r)
+	ret := CsRand.Intn(r)
 	return ret + min
+}
+
+// Bytes fills the slice with random data.
+func Bytes(buf []byte) error {
+	n, err := cryptRand.Read(buf)
+	if err != nil {
+		// Yes, the go idiom is to check the length, but we panic() when it
+		// does not match because the system is screwed at that point.
+		return err
+	} else if n != len(buf) {
+		panic(fmt.Sprintf("Bytes: truncated rand.Read (%d, %d)", n, len(buf)))
+	}
+
+	return nil
 }
 
 /* vim :set ts=4 sw=4 sts=4 noet : */

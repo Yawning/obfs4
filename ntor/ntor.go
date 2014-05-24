@@ -39,7 +39,6 @@ package ntor
 import (
 	"bytes"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -50,6 +49,8 @@ import (
 	"code.google.com/p/go.crypto/hkdf"
 
 	"github.com/agl/ed25519/extra25519"
+
+	"github.com/yawning/obfs4/csrand"
 )
 
 const (
@@ -266,7 +267,7 @@ func NewKeypair(elligator bool) (*Keypair, error) {
 		// Generate a Curve25519 private key.  Like everyone who does this,
 		// run the CSPRNG output through SHA256 for extra tinfoil hattery.
 		priv := keypair.private.Bytes()[:]
-		_, err := rand.Read(priv)
+		err := csrand.Bytes(priv)
 		if err != nil {
 			return nil, err
 		}

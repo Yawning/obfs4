@@ -29,11 +29,12 @@ package obfs4
 
 import (
 	"container/list"
-	"crypto/rand"
 	"encoding/binary"
 	"sync"
 
 	"github.com/dchest/siphash"
+
+	"github.com/yawning/obfs4/csrand"
 )
 
 // maxFilterSize is the maximum capacity of the replay filter.  The busiest
@@ -63,7 +64,7 @@ type filterEntry struct {
 func newReplayFilter() (filter *replayFilter, err error) {
 	// Initialize the SipHash-2-4 instance with a random key.
 	var key [16]byte
-	_, err = rand.Read(key[:])
+	err = csrand.Bytes(key[:])
 	if err != nil {
 		return
 	}
