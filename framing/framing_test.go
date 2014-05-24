@@ -86,7 +86,7 @@ func TestEncoder_Encode_Oversize(t *testing.T) {
 	encoder := newEncoder(t)
 
 	var frame [MaximumSegmentLength]byte
-	var buf [MaximumFramePayloadLength+1]byte
+	var buf [MaximumFramePayloadLength + 1]byte
 	_, _ = rand.Read(buf[:]) // YOLO
 	_, err := encoder.Encode(frame[:], buf[:])
 	if _, ok := err.(InvalidPayloadLengthError); !ok {

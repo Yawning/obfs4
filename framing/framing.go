@@ -65,6 +65,8 @@ import (
 	"code.google.com/p/go.crypto/nacl/secretbox"
 
 	"github.com/dchest/siphash"
+
+	"github.com/yawning/obfs4/csrand"
 )
 
 const (
@@ -109,14 +111,6 @@ type InvalidPayloadLengthError int
 
 func (e InvalidPayloadLengthError) Error() string {
 	return fmt.Sprintf("framing: Invalid payload length: %d", int(e))
-}
-
-// InvalidFrameLengthError is the error returned when Decoder.Decode()
-// rejects the payload length.
-type InvalidFrameLengthError int
-
-func (e InvalidFrameLengthError) Error() string {
-	return fmt.Sprintf("framing: Invalid frame length: %d", int(e))
 }
 
 type boxNonce struct {
@@ -179,7 +173,7 @@ func (encoder *Encoder) Encode(frame, payload []byte) (n int, err error) {
 	if MaximumFramePayloadLength < payloadLen {
 		return 0, InvalidPayloadLengthError(payloadLen)
 	}
-	if len(frame) < payloadLen + FrameOverhead {
+	if len(frame) < payloadLen+FrameOverhead {
 		return 0, io.ErrShortBuffer
 	}
 
@@ -195,7 +189,7 @@ func (encoder *Encoder) Encode(frame, payload []byte) (n int, err error) {
 	box := secretbox.Seal(frame[:lengthLength], payload, &nonce, &encoder.key)
 
 	// Obfuscate the length.
-	length := uint16(len(box)-lengthLength)
+	length := uint16(len(box) - lengthLength)
 	encoder.sip.Write(nonce[:])
 	lengthMask := encoder.sip.Sum(nil)
 	encoder.sip.Reset()
@@ -212,8 +206,9 @@ type Decoder struct {
 	nonce boxNonce
 	sip   hash.Hash64
 
-	nextNonce  [nonceLength]byte
-	nextLength uint16
+	nextNonce         [nonceLength]byte
+	nextLength        uint16
+	nextLengthInvalid bool
 }
 
 // NewDecoder creates a new Decoder instance.  It must be supplied a slice
@@ -266,7 +261,19 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 		decoder.sip.Reset()
 		length ^= binary.BigEndian.Uint16(lengthMask)
 		if maxFrameLength < length || minFrameLength > length {
-			return 0, InvalidFrameLengthError(length)
+			// Per "Plaintext Recovery Attacks Against SSH" by
+			// Martin R. Albrecht, Kenneth G. Paterson and Gaven J. Watson,
+			// there are a class of attacks againt protocols that use similar
+			// sorts of framing schemes.
+			//
+			// While obfs4 should not allow plaintext recovery (CBC mode is
+			// not used), attempt to mitigate out of bound frame length errors
+			// by pretending that the length was a random valid range as per
+			// the countermeasure suggested by Denis Bider in section 6 of the
+			// paper.
+
+			decoder.nextLengthInvalid = true
+			length = uint16(csrand.IntRange(minFrameLength, maxFrameLength))
 		}
 		decoder.nextLength = length
 	}
@@ -283,10 +290,12 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 	} else if n != int(decoder.nextLength) {
 		// Should *NEVER* happen, since the length is checked.
 		panic(fmt.Sprintf("BUG: Failed to read secretbox, got %d, should have %d",
-						  n, decoder.nextLength))
+			n, decoder.nextLength))
 	}
 	out, ok := secretbox.Open(data[:0], box[:n], &decoder.nextNonce, &decoder.key)
-	if !ok {
+	if !ok || decoder.nextLengthInvalid {
+		// When a random lenght is used (on length error) the tag should always
+		// mismatch, but be paranoid.
 		return 0, ErrTagMismatch
 	}
 
