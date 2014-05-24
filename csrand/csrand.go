@@ -35,8 +35,8 @@ package csrand
 
 import (
 	cryptRand "crypto/rand"
+	"encoding/binary"
 	"fmt"
-	"math/big"
 	"math/rand"
 )
 
@@ -52,12 +52,15 @@ type csRandSource struct {
 }
 
 func (r csRandSource) Int63() int64 {
-	ret, err := cryptRand.Int(cryptRand.Reader, big.NewInt(int64((1<<63)-1)))
+	var src [8]byte
+	err := Bytes(src[:])
 	if err != nil {
 		panic(err)
 	}
+	val := binary.BigEndian.Uint64(src[:])
+	val &= (1<<63 - 1)
 
-	return ret.Int64()
+	return int64(val)
 }
 
 func (r csRandSource) Seed(seed int64) {
