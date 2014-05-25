@@ -307,14 +307,7 @@ func clientSetup() (launched bool) {
 	ptClientProxy, err := ptGetProxy()
 	if err != nil {
 		log.Fatal(err)
-	}
-	if ptClientProxy != nil {
-		// XXX: Limit this to SOCKS5 for now.
-		if ptClientProxy.Scheme == "http" {
-			ptProxyError(fmt.Sprintf("proxy scheme not supported: %s",
-				ptClientProxy.Scheme))
-			return
-		}
+	} else if ptClientProxy != nil {
 		ptProxyDone()
 	}
 

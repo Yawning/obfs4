@@ -162,3 +162,5 @@ func init() {
 	// Despite the scheme name, this really is SOCKS4.
 	proxy.RegisterDialerType("socks4a", newSOCKS4)
 }
+
+/* vim :set ts=4 sw=4 sts=4 noet : */
