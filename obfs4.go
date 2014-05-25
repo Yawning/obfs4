@@ -533,10 +533,21 @@ func (c *Obfs4Conn) SetWriteDeadline(t time.Time) error {
 	return syscall.ENOTSUP
 }
 
+// DialFn is a function pointer to a dial routine that matches the
+// net.Dialer.Dial routine.
+type DialFn func(string, string) (net.Conn, error)
+
 // DialObfs4 connects to the remote address on the network, and handshakes with
 // the peer's obfs4 Node ID and Identity Public Key.  nodeID and publicKey are
 // expected as strings containing the Base64 encoded values.
 func DialObfs4(network, address, nodeID, publicKey string, iatObfuscation bool) (*Obfs4Conn, error) {
+
+	return DialObfs4DialFn(net.Dial, network, address, nodeID, publicKey, iatObfuscation)
+}
+
+// DialObfs4DialFn connects to the remote address on the network via DialFn,
+// and handshakes with the peers' obfs4 Node ID and Identity Public Key.
+func DialObfs4DialFn(dialFn DialFn, network, address, nodeID, publicKey string, iatObfuscation bool) (*Obfs4Conn, error) {
 	// Decode the node_id/public_key.
 	pub, err := ntor.PublicKeyFromBase64(publicKey)
 	if err != nil {
@@ -553,13 +564,13 @@ func DialObfs4(network, address, nodeID, publicKey string, iatObfuscation bool) 
 		return nil, err
 	}
 
-	// Connect to the peer.
+	// Generate the Obfs4Conn.
 	c := new(Obfs4Conn)
 	c.lenProbDist = newWDist(seed, 0, framing.MaximumSegmentLength)
 	if iatObfuscation {
 		c.iatProbDist = newWDist(seed, 0, maxIatDelay)
 	}
-	c.conn, err = net.Dial(network, address)
+	c.conn, err = dialFn(network, address)
 	if err != nil {
 		return nil, err
 	}

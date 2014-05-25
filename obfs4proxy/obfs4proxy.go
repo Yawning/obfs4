@@ -53,6 +53,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -222,7 +223,7 @@ func serverSetup() (launched bool) {
 	return
 }
 
-func clientHandler(conn *pt.SocksConn) error {
+func clientHandler(conn *pt.SocksConn, proxyURI *url.URL) error {
 	defer conn.Close()
 
 	var addr string
@@ -254,8 +255,13 @@ func clientHandler(conn *pt.SocksConn) error {
 	}()
 
 	defer logAndRecover(nil)
-	remote, err := obfs4.DialObfs4("tcp", conn.Req.Target, nodeID, publicKey,
-		iatObfuscation)
+	dialFn, err := getProxyDialer(proxyURI)
+	if err != nil {
+		log.Printf("[ERROR] client: failed to get proxy dialer: %s", err)
+		conn.Reject()
+		return err
+	}
+	remote, err := obfs4.DialObfs4DialFn(dialFn, "tcp", conn.Req.Target, nodeID, publicKey, iatObfuscation)
 	if err != nil {
 		log.Printf("[ERROR] client: %p: Handshake failed: %s", remote, err)
 		conn.Reject()
@@ -272,7 +278,7 @@ func clientHandler(conn *pt.SocksConn) error {
 	return nil
 }
 
-func clientAcceptLoop(ln *pt.SocksListener) error {
+func clientAcceptLoop(ln *pt.SocksListener, proxyURI *url.URL) error {
 	defer ln.Close()
 	for {
 		conn, err := ln.AcceptSocks()
@@ -282,7 +288,7 @@ func clientAcceptLoop(ln *pt.SocksListener) error {
 			}
 			continue
 		}
-		go clientHandler(conn)
+		go clientHandler(conn, proxyURI)
 	}
 }
 
@@ -296,17 +302,20 @@ func clientSetup() (launched bool) {
 	ptClientInfo, err := pt.ClientSetup([]string{obfs4Method})
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 
 	ptClientProxy, err := ptGetProxy()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	if ptClientProxy != nil {
-		// XXX: Remove this once done.
-		ptProxyError("proxy are not supported yet")
+		// XXX: Limit this to SOCKS5 for now.
+		if ptClientProxy.Scheme != "socks5" {
+			ptProxyError(fmt.Sprintf("proxy scheme not supported: %s",
+				ptClientProxy.Scheme))
+			return
+		}
+		ptProxyDone()
 	}
 
 	for _, methodName := range ptClientInfo.MethodNames {
@@ -317,7 +326,7 @@ func clientSetup() (launched bool) {
 				pt.CmethodError(methodName, err.Error())
 				break
 			}
-			go clientAcceptLoop(ln)
+			go clientAcceptLoop(ln, ptClientProxy)
 			pt.Cmethod(methodName, ln.Version(), ln.Addr())
 			ptListeners = append(ptListeners, ln)
 			launched = true
