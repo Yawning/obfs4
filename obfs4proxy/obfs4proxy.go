@@ -299,6 +299,16 @@ func clientSetup() (launched bool) {
 		return
 	}
 
+	ptClientProxy, err := ptGetProxy()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	if ptClientProxy != nil {
+		// XXX: Remove this once done.
+		ptProxyError("proxy are not supported yet")
+	}
+
 	for _, methodName := range ptClientInfo.MethodNames {
 		switch methodName {
 		case obfs4Method:

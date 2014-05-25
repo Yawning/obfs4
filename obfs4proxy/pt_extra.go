@@ -30,6 +30,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 
 	"git.torproject.org/pluggable-transports/goptlib"
@@ -42,6 +43,17 @@ func ptEnvError(msg string) error {
 	line := []byte(fmt.Sprintf("ENV-ERROR %s\n", msg))
 	pt.Stdout.Write(line)
 	return errors.New(msg)
+}
+
+func ptProxyError(msg string) error {
+	line := []byte(fmt.Sprintf("PROXY-ERROR %s\n", msg))
+	pt.Stdout.Write(line)
+	return errors.New(msg)
+}
+
+func ptProxyDone() {
+	line := []byte("PROXY DONE\n")
+	pt.Stdout.Write(line)
 }
 
 func ptMakeStateDir() (string, error) {
@@ -64,4 +76,60 @@ func ptIsClient() (bool, error) {
 		return false, nil
 	}
 	return false, errors.New("not launched as a managed transport")
+}
+
+func ptGetProxy() (*url.URL, error) {
+	specString := os.Getenv("TOR_PT_PROXY")
+	if specString == "" {
+		return nil, nil
+	}
+	spec, err := url.Parse(specString)
+	if err != nil {
+		return nil, ptProxyError(fmt.Sprintf("failed to parse proxy config: %s", err))
+	}
+
+	// Validate the TOR_PT_PROXY uri.
+	if !spec.IsAbs() {
+		return nil, ptProxyError("proxy URI is relative, must be absolute")
+	}
+	if spec.Path != "" {
+		return nil, ptProxyError("proxy URI has a path defined")
+	}
+	if spec.RawQuery != "" {
+		return nil, ptProxyError("proxy URI has a query defined")
+	}
+	if spec.Fragment != "" {
+		return nil, ptProxyError("proxy URI has a fragment defined")
+	}
+
+	switch spec.Scheme {
+	case "http":
+		// The most forgiving of proxies.
+
+	case "socks4a":
+		if spec.User != nil {
+			_, isSet := spec.User.Password()
+			if isSet {
+				return nil, ptProxyError("proxy URI specified SOCKS4a and a password")
+			}
+		}
+
+	case "socks5":
+		if spec.User != nil {
+			// UNAME/PASSWD both must be between 1 and 255 bytes long. (RFC1929)
+			user := spec.User.Username()
+			passwd, isSet := spec.User.Password()
+			if len(user) < 1 || len(user) > 255 {
+				return nil, ptProxyError("proxy URI specified a invalid SOCKS5 username")
+			}
+			if !isSet || len(passwd) < 1 || len(passwd) > 255 {
+				return nil, ptProxyError("proxy URI specified a invalid SOCKS5 password")
+			}
+		}
+
+	default:
+		return nil, ptProxyError(fmt.Sprintf("proxy URI has invalid scheme: %s", spec.Scheme))
+	}
+
+	return spec, nil
 }
