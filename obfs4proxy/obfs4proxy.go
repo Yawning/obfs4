@@ -69,6 +69,7 @@ const (
 	obfs4LogFile = "obfs4proxy.log"
 )
 
+var enableLogging bool
 var unsafeLogging bool
 var iatObfuscation bool
 var ptListeners []net.Listener
@@ -164,13 +165,16 @@ func serverAcceptLoop(ln *obfs4.Obfs4Listener, info *pt.ServerInfo) error {
 	}
 }
 
-func serverSetup() bool {
-	launch := false
-	var err error
+func serverSetup() (launched bool) {
+	// Initialize pt logging.
+	err := ptInitializeLogging(enableLogging)
+	if err != nil {
+		return
+	}
 
 	ptServerInfo, err := pt.ServerSetup([]string{obfs4Method})
 	if err != nil {
-		return launch
+		return
 	}
 
 	for _, bindaddr := range ptServerInfo.Bindaddrs {
@@ -208,14 +212,14 @@ func serverSetup() bool {
 			go serverAcceptLoop(ln, &ptServerInfo)
 			pt.SmethodArgs(bindaddr.MethodName, ln.Addr(), args)
 			ptListeners = append(ptListeners, ln)
-			launch = true
+			launched = true
 		default:
 			pt.SmethodError(bindaddr.MethodName, "no such method")
 		}
 	}
 	pt.SmethodsDone()
 
-	return launch
+	return
 }
 
 func clientHandler(conn *pt.SocksConn) error {
@@ -282,13 +286,17 @@ func clientAcceptLoop(ln *pt.SocksListener) error {
 	}
 }
 
-func clientSetup() bool {
-	launch := false
+func clientSetup() (launched bool) {
+	// Initialize pt logging.
+	err := ptInitializeLogging(enableLogging)
+	if err != nil {
+		return
+	}
 
 	ptClientInfo, err := pt.ClientSetup([]string{obfs4Method})
 	if err != nil {
 		log.Fatal(err)
-		return launch
+		return
 	}
 
 	for _, methodName := range ptClientInfo.MethodNames {
@@ -302,24 +310,14 @@ func clientSetup() bool {
 			go clientAcceptLoop(ln)
 			pt.Cmethod(methodName, ln.Version(), ln.Addr())
 			ptListeners = append(ptListeners, ln)
-			launch = true
+			launched = true
 		default:
 			pt.CmethodError(methodName, "no such method")
 		}
 	}
 	pt.CmethodsDone()
 
-	return launch
-}
-
-func ptIsClient() bool {
-	env := os.Getenv("TOR_PT_CLIENT_TRANSPORTS")
-	return env != ""
-}
-
-func ptIsServer() bool {
-	env := os.Getenv("TOR_PT_SERVER_TRANSPORTS")
-	return env != ""
+	return
 }
 
 func ptGetStateDir() (dir string, err error) {
@@ -336,21 +334,26 @@ func ptGetStateDir() (dir string, err error) {
 	return
 }
 
-func ptInitializeLogging(enable bool) {
+func ptInitializeLogging(enable bool) error {
 	if enable {
-		dir, err := ptGetStateDir()
-		if err != nil || dir == "" {
-			return
+		// pt.MakeStateDir will ENV-ERROR for us.
+		dir, err := ptMakeStateDir()
+		if err != nil {
+			return err
 		}
 
+		// While we could just exit, log an ENV-ERROR so it will propagate to
+		// the tor log.
 		f, err := os.OpenFile(path.Join(dir, obfs4LogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
-			log.Fatalf("[ERROR] Failed to open log file: %s", err)
+			return ptEnvError(fmt.Sprintf("Failed to open log file: %s\n", err))
 		}
 		log.SetOutput(f)
 	} else {
 		log.SetOutput(ioutil.Discard)
 	}
+
+	return nil
 }
 
 func generateServerParams(id string) {
@@ -396,27 +399,28 @@ func generateServerParams(id string) {
 func main() {
 	// Some command line args.
 	genParams := flag.String("genServerParams", "", "Generate server params given a bridge fingerprint.")
-	doLogging := flag.Bool("enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
+	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
 	flag.BoolVar(&iatObfuscation, "iatObfuscation", false, "Enable IAT obufscation (EXPENSIVE)")
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
 	if *genParams != "" {
 		generateServerParams(*genParams)
-		os.Exit(0)
+		return
 	}
-
-	// Initialize pt logging.
-	ptInitializeLogging(*doLogging)
 
 	// Go through the pt protocol and initialize client or server mode.
 	launched := false
-	if ptIsClient() {
+	isClient, err := ptIsClient()
+	if err != nil {
+		log.Fatal("[ERROR] obfs4proxy must be run as a managed transport or server")
+	} else if isClient {
 		launched = clientSetup()
-	} else if ptIsServer() {
+	} else {
 		launched = serverSetup()
 	}
 	if !launched {
-		log.Fatal("[ERROR] obfs4proxy must be run as a managed transport or server")
+		// Something must have failed in client/server setup, just bail.
+		os.Exit(-1)
 	}
 
 	log.Println("[INFO] obfs4proxy - Launched and listening")
