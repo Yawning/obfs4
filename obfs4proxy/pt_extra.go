@@ -30,8 +30,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"strconv"
 
 	"git.torproject.org/pluggable-transports/goptlib"
 )
@@ -131,5 +133,36 @@ func ptGetProxy() (*url.URL, error) {
 		return nil, ptProxyError(fmt.Sprintf("proxy URI has invalid scheme: %s", spec.Scheme))
 	}
 
+	err = validateAddrStr(spec.Host)
+	if err != nil {
+		return nil, ptProxyError(fmt.Sprintf("proxy URI has invalid host: %s", err))
+	}
+
 	return spec, nil
+}
+
+// Sigh, pt.resolveAddr() isn't exported.  Include our own getto version that
+// doesn't work around #7011, because we don't work with pre-0.2.5.x tor, and
+// all we care about is validation anyway.
+func validateAddrStr(addrStr string) error {
+	ipStr, portStr, err := net.SplitHostPort(addrStr)
+	if err != nil {
+		return err
+	}
+
+	if ipStr == "" {
+		return net.InvalidAddrError(fmt.Sprintf("address string %q lacks a host part", addrStr))
+	}
+	if portStr == "" {
+		return net.InvalidAddrError(fmt.Sprintf("address string %q lacks a port part", addrStr))
+	}
+	if net.ParseIP(ipStr) == nil {
+		return net.InvalidAddrError(fmt.Sprintf("not an IP string: %q", ipStr))
+	}
+	_, err = strconv.ParseUint(portStr, 10, 16)
+	if err != nil {
+		return net.InvalidAddrError(fmt.Sprintf("not a Port string: %q", portStr))
+	}
+
+	return nil
 }
