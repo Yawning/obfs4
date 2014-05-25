@@ -45,7 +45,7 @@ type httpProxy struct {
 	haveAuth bool
 	username string
 	password string
-	forward proxy.Dialer
+	forward  proxy.Dialer
 }
 
 func newHTTP(uri *url.URL, forward proxy.Dialer) (proxy.Dialer, error) {
@@ -55,7 +55,7 @@ func newHTTP(uri *url.URL, forward proxy.Dialer) (proxy.Dialer, error) {
 	if uri.User != nil {
 		s.haveAuth = true
 		s.username = uri.User.Username()
-		s.password,_ = uri.User.Password()
+		s.password, _ = uri.User.Password()
 	}
 
 	return s, nil
@@ -110,10 +110,10 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 
 // httpConn is the mountain of bullshit we need to do just for staleReader.
 type httpConn struct {
-	remoteAddr *net.TCPAddr
-	httpConn *httputil.ClientConn
+	remoteAddr   *net.TCPAddr
+	httpConn     *httputil.ClientConn
 	hijackedConn net.Conn
-	staleReader *bufio.Reader
+	staleReader  *bufio.Reader
 }
 
 func (c *httpConn) Read(b []byte) (int, error) {
