@@ -28,11 +28,7 @@
 package main
 
 import (
-	"errors"
-	"io"
-	"net"
 	"net/url"
-	"strconv"
 
 	"code.google.com/p/go.net/proxy"
 
@@ -52,107 +48,4 @@ func getProxyDialer(uri *url.URL) (obfs4.DialFn, error) {
 	}
 
 	return dialer.Dial, nil
-}
-
-// socks4 is a SOCKSv4 proxy.
-type socks4 struct {
-	hostPort string
-	username string
-	forward  proxy.Dialer
-}
-
-const (
-	socks4Version        = 0x04
-	socks4CommandConnect = 0x01
-	socks4Null           = 0x00
-	socks4ReplyVersion   = 0x00
-
-	socks4Granted = 0x5a
-)
-
-func newSOCKS4(uri *url.URL, forward proxy.Dialer) (proxy.Dialer, error) {
-	s := new(socks4)
-	s.hostPort = uri.Host
-	s.forward = forward
-	if uri.User != nil {
-		s.username = uri.User.Username()
-	}
-	return s, nil
-}
-
-func (s *socks4) Dial(network, addr string) (net.Conn, error) {
-	if network != "tcp" && network != "tcp4" {
-		return nil, errors.New("invalid network type")
-	}
-
-	// Deal with the destination address/string.
-	ipStr, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		return nil, errors.New("failed to parse destination IP")
-	}
-	ip4 := ip.To4()
-	if ip4 == nil {
-		return nil, errors.New("destination address is not IPv4")
-	}
-	port, err := strconv.ParseUint(portStr, 10, 16)
-	if err != nil {
-		return nil, err
-	}
-
-	// Connect to the proxy.
-	c, err := s.forward.Dial("tcp", s.hostPort)
-	if err != nil {
-		return nil, err
-	}
-
-	// Make/write the request:
-	//  +----+----+----+----+----+----+----+----+----+----+....+----+
-	//  | VN | CD | DSTPORT |      DSTIP        | USERID       |NULL|
-	//  +----+----+----+----+----+----+----+----+----+----+....+----+
-
-	req := make([]byte, 0, 9+len(s.username))
-	req = append(req, socks4Version)
-	req = append(req, socks4CommandConnect)
-	req = append(req, byte(port>>8), byte(port))
-	req = append(req, ip4...)
-	if s.username != "" {
-		req = append(req, s.username...)
-	}
-	req = append(req, socks4Null)
-	_, err = c.Write(req)
-	if err != nil {
-		c.Close()
-		return nil, err
-	}
-
-	// Read the response:
-	// +----+----+----+----+----+----+----+----+
-	// | VN | CD | DSTPORT |      DSTIP        |
-	// +----+----+----+----+----+----+----+----+
-
-	var resp [8]byte
-	_, err = io.ReadFull(c, resp[:])
-	if err != nil {
-		c.Close()
-		return nil, err
-	}
-	if resp[0] != socks4ReplyVersion {
-		c.Close()
-		return nil, errors.New("proxy returned invalid SOCKS4 version")
-	}
-	if resp[1] != socks4Granted {
-		c.Close()
-		return nil, errors.New("proxy rejected the connect request")
-	}
-
-	return c, nil
-}
-
-func init() {
-	// Despite the scheme name, this really is SOCKS4.
-	proxy.RegisterDialerType("socks4a", newSOCKS4)
 }
