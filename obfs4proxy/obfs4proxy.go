@@ -60,7 +60,7 @@ import (
 	"sync"
 	"syscall"
 
-	"git.torproject.org/pluggable-transports/goptlib"
+	"git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/yawning/obfs4"
 	"github.com/yawning/obfs4/ntor"
 )
