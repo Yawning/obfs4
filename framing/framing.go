@@ -240,12 +240,9 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 
 		// Remove the length field from the buffer.
 		var obfsLen [lengthLength]byte
-		n, err := frames.Read(obfsLen[:])
+		_, err := io.ReadFull(frames, obfsLen[:])
 		if err != nil {
 			return 0, err
-		} else if n != lengthLength {
-			// Should *NEVER* happen, since at least 2 bytes exist.
-			panic(fmt.Sprintf("BUG: Failed to read obfuscated length: %d", n))
 		}
 
 		// Derive the nonce the peer used.
@@ -284,13 +281,9 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 
 	// Unseal the frame.
 	var box [maxFrameLength]byte
-	n, err := frames.Read(box[:decoder.nextLength])
+	n, err := io.ReadFull(frames, box[:decoder.nextLength])
 	if err != nil {
 		return 0, err
-	} else if n != int(decoder.nextLength) {
-		// Should *NEVER* happen, since the length is checked.
-		panic(fmt.Sprintf("BUG: Failed to read secretbox, got %d, should have %d",
-			n, decoder.nextLength))
 	}
 	out, ok := secretbox.Open(data[:0], box[:n], &decoder.nextNonce, &decoder.key)
 	if !ok || decoder.nextLengthInvalid {

@@ -37,6 +37,7 @@ import (
 	cryptRand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math/rand"
 )
 
@@ -44,7 +45,7 @@ var (
 	csRandSourceInstance csRandSource
 
 	// CsRand is a math/rand instance backed by crypto/rand CSPRNG.
-	CsRand       = rand.New(csRandSourceInstance)
+	CsRand = rand.New(csRandSourceInstance)
 )
 
 type csRandSource struct {
@@ -85,13 +86,9 @@ func IntRange(min, max int) int {
 
 // Bytes fills the slice with random data.
 func Bytes(buf []byte) error {
-	n, err := cryptRand.Read(buf)
+	_, err := io.ReadFull(cryptRand.Reader, buf)
 	if err != nil {
-		// Yes, the go idiom is to check the length, but we panic() when it
-		// does not match because the system is screwed at that point.
 		return err
-	} else if n != len(buf) {
-		panic(fmt.Sprintf("Bytes: truncated rand.Read (%d, %d)", n, len(buf)))
 	}
 
 	return nil
