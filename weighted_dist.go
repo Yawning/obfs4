@@ -39,6 +39,11 @@ import (
 	"github.com/yawning/obfs4/csrand"
 )
 
+const (
+	minBuckets = 1
+	maxBuckets = 100
+)
+
 // DrbgSeedLength is the length of the hashDrbg seed.
 const DrbgSeedLength = 32
 
@@ -133,10 +138,11 @@ func (drbg *hashDrbg) Seed(seed int64) {
 
 // wDist is a weighted distribution.
 type wDist struct {
-	minValue int
-	maxValue int
-	values   []int
-	buckets  []float64
+	minValue    int
+	maxValue    int
+	values      []int
+	buckets     []int64
+	totalWeight int64
 
 	rng *rand.Rand
 }
@@ -160,11 +166,11 @@ func newWDist(seed *DrbgSeed, min, max int) (w *wDist) {
 // sample generates a random value according to the distribution.
 func (w *wDist) sample() int {
 	retIdx := 0
-	totalProb := 0.0
-	prob := csrand.Float64()
-	for i, bucketProb := range w.buckets {
-		totalProb += bucketProb
-		if prob <= totalProb {
+	var totalWeight int64
+	weight := csrand.Int63n(w.totalWeight)
+	for i, bucketWeight := range w.buckets {
+		totalWeight += bucketWeight
+		if weight <= totalWeight {
 			retIdx = i
 			break
 		}
@@ -181,15 +187,22 @@ func (w *wDist) reset(seed *DrbgSeed) {
 
 	nBuckets := (w.maxValue + 1) - w.minValue
 	w.values = w.rng.Perm(nBuckets)
-
-	w.buckets = make([]float64, nBuckets)
-	var totalProb float64
-	for i, _ := range w.buckets {
-		prob := w.rng.Float64() * (1.0 - totalProb)
-		w.buckets[i] = prob
-		totalProb += prob
+	if nBuckets < minBuckets {
+		nBuckets = minBuckets
 	}
-	w.buckets[len(w.buckets)-1] = 1.0
+	if nBuckets > maxBuckets {
+		nBuckets = maxBuckets
+	}
+	nBuckets = w.rng.Intn(nBuckets) + 1
+
+	w.totalWeight = 0
+	w.buckets = make([]int64, nBuckets)
+	for i, _ := range w.buckets {
+		prob := w.rng.Int63n(1000)
+		w.buckets[i] = prob
+		w.totalWeight += prob
+	}
+	w.buckets[len(w.buckets)-1] = w.totalWeight
 }
 
 /* vim :set ts=4 sw=4 sts=4 noet : */

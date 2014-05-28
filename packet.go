@@ -28,6 +28,7 @@
 package obfs4
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -182,7 +183,12 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 				}
 				c.lenProbDist.reset(seed)
 				if c.iatProbDist != nil {
-					c.iatProbDist.reset(seed)
+					iatSeedSrc := sha256.Sum256(seed.Bytes()[:])
+					iatSeed, err := DrbgSeedFromBytes(iatSeedSrc[:])
+					if err != nil {
+						break
+					}
+					c.iatProbDist.reset(iatSeed)
 				}
 			}
 		default:

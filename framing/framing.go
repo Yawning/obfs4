@@ -287,7 +287,7 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 	}
 	out, ok := secretbox.Open(data[:0], box[:n], &decoder.nextNonce, &decoder.key)
 	if !ok || decoder.nextLengthInvalid {
-		// When a random lenght is used (on length error) the tag should always
+		// When a random length is used (on length error) the tag should always
 		// mismatch, but be paranoid.
 		return 0, ErrTagMismatch
 	}

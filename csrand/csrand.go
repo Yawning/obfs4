@@ -68,7 +68,12 @@ func (r csRandSource) Seed(seed int64) {
 	// No-op.
 }
 
-// Float64 returns, as a float 64, a pesudo random number in [0.0,1.0).
+// Int63n returns, as a int64, a pseudo random number in [0, n).
+func Int63n(n int64) int64 {
+	return CsRand.Int63n(n)
+}
+
+// Float64 returns, as a float64, a pesudo random number in [0.0,1.0).
 func Float64() float64 {
 	return CsRand.Float64()
 }

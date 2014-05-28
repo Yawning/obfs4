@@ -33,6 +33,7 @@ package obfs4
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"math/rand"
@@ -568,7 +569,12 @@ func DialObfs4DialFn(dialFn DialFn, network, address, nodeID, publicKey string, 
 	c := new(Obfs4Conn)
 	c.lenProbDist = newWDist(seed, 0, framing.MaximumSegmentLength)
 	if iatObfuscation {
-		c.iatProbDist = newWDist(seed, 0, maxIatDelay)
+		iatSeedSrc := sha256.Sum256(seed.Bytes()[:])
+		iatSeed, err := DrbgSeedFromBytes(iatSeedSrc[:])
+		if err != nil {
+			return nil, err
+		}
+		c.iatProbDist = newWDist(iatSeed, 0, maxIatDelay)
 	}
 	c.conn, err = dialFn(network, address)
 	if err != nil {
@@ -596,6 +602,7 @@ type Obfs4Listener struct {
 	nodeID  *ntor.NodeID
 
 	seed           *DrbgSeed
+	iatSeed        *DrbgSeed
 	iatObfuscation bool
 
 	closeDelayBytes int
@@ -631,7 +638,7 @@ func (l *Obfs4Listener) AcceptObfs4() (*Obfs4Conn, error) {
 	cObfs.listener = l
 	cObfs.lenProbDist = newWDist(l.seed, 0, framing.MaximumSegmentLength)
 	if l.iatObfuscation {
-		cObfs.iatProbDist = newWDist(l.seed, 0, maxIatDelay)
+		cObfs.iatProbDist = newWDist(l.iatSeed, 0, maxIatDelay)
 	}
 	if err != nil {
 		c.Close()
@@ -692,6 +699,14 @@ func ListenObfs4(network, laddr, nodeID, privateKey, seed string, iatObfuscation
 	if err != nil {
 		return nil, err
 	}
+	l.iatObfuscation = iatObfuscation
+	if l.iatObfuscation {
+		iatSeedSrc := sha256.Sum256(l.seed.Bytes()[:])
+		l.iatSeed, err = DrbgSeedFromBytes(iatSeedSrc[:])
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	l.filter, err = newReplayFilter()
 	if err != nil {
@@ -701,7 +716,6 @@ func ListenObfs4(network, laddr, nodeID, privateKey, seed string, iatObfuscation
 	rng := rand.New(newHashDrbg(l.seed))
 	l.closeDelayBytes = rng.Intn(maxCloseDelayBytes)
 	l.closeDelay = rng.Intn(maxCloseDelay)
-	l.iatObfuscation = iatObfuscation
 
 	// Start up the listener.
 	l.listener, err = net.Listen(network, laddr)
