@@ -76,14 +76,14 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	}
 
 	// HACK HACK HACK HACK.  http.ReadRequest also does this.
-	reqUrl, err := url.Parse("http://" + addr)
+	reqURL, err := url.Parse("http://" + addr)
 	if err != nil {
 		conn.httpConn.Close()
 		return nil, err
 	}
-	reqUrl.Scheme = ""
+	reqURL.Scheme = ""
 
-	req, err := http.NewRequest("CONNECT", reqUrl.String(), nil)
+	req, err := http.NewRequest("CONNECT", reqURL.String(), nil)
 	if err != nil {
 		conn.httpConn.Close()
 		return nil, err
@@ -120,9 +120,8 @@ func (c *httpConn) Read(b []byte) (int, error) {
 	if c.staleReader != nil {
 		if c.staleReader.Buffered() > 0 {
 			return c.staleReader.Read(b)
-		} else {
-			c.staleReader = nil
 		}
+		c.staleReader = nil
 	}
 	return c.hijackedConn.Read(b)
 }
