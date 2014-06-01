@@ -121,7 +121,7 @@ type clientHandshake struct {
 	serverMark           []byte
 }
 
-func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey, sessionKey *ntor.Keypair) (*clientHandshake, error) {
+func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey, sessionKey *ntor.Keypair) *clientHandshake {
 	hs := new(clientHandshake)
 	hs.keypair = sessionKey
 	hs.nodeID = nodeID
@@ -129,7 +129,7 @@ func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey, ses
 	hs.padLen = csrand.IntRange(clientMinPadLength, clientMaxPadLength)
 	hs.mac = hmac.New(sha256.New, append(hs.serverIdentity.Bytes()[:], hs.nodeID.Bytes()[:]...))
 
-	return hs, nil
+	return hs
 }
 
 func (hs *clientHandshake) generateHandshake() ([]byte, error) {
@@ -236,8 +236,9 @@ type serverHandshake struct {
 	clientMark           []byte
 }
 
-func newServerHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.Keypair) *serverHandshake {
+func newServerHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.Keypair, sessionKey *ntor.Keypair) *serverHandshake {
 	hs := new(serverHandshake)
+	hs.keypair = sessionKey
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
 	hs.padLen = csrand.IntRange(serverMinPadLength, serverMaxPadLength)
@@ -310,14 +311,6 @@ func (hs *serverHandshake) parseClientHandshake(filter *replayFilter, resp []byt
 	// Client should never sent trailing garbage.
 	if len(resp) != pos+markLength+macLength {
 		return nil, ErrInvalidHandshake
-	}
-
-	// At this point the client knows that we exist, so do the keypair
-	// generation and complete our side of the handshake.
-	var err error
-	hs.keypair, err = ntor.NewKeypair(true)
-	if err != nil {
-		return nil, err
 	}
 
 	clientPublic := hs.clientRepresentative.ToPublic()

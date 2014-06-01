@@ -47,10 +47,7 @@ func TestHandshakeNtor(t *testing.T) {
 		if err != nil {
 			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
 		}
-		clientHs, err := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
-		if err != nil {
-			t.Fatalf("[%d:0] newClientHandshake failed: %s", l, err)
-		}
+		clientHs := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
 		clientHs.padLen = l
 
 		// Generate what the client will send to the server.
@@ -69,7 +66,11 @@ func TestHandshakeNtor(t *testing.T) {
 		}
 
 		// Generate the server state and override the pad length.
-		serverHs := newServerHandshake(nodeID, idKeypair)
+		serverKeypair, err := ntor.NewKeypair(true)
+		if err != nil {
+			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
+		}
+		serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 		serverHs.padLen = serverMinPadLength
 
 		// Parse the client handshake message.
@@ -107,10 +108,7 @@ func TestHandshakeNtor(t *testing.T) {
 		if err != nil {
 			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
 		}
-		clientHs, err := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
-		if err != nil {
-			t.Fatalf("[%d:0] newClientHandshake failed: %s", l, err)
-		}
+		clientHs := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
 		clientHs.padLen = clientMinPadLength
 
 		// Generate what the client will send to the server.
@@ -123,7 +121,11 @@ func TestHandshakeNtor(t *testing.T) {
 		}
 
 		// Generate the server state and override the pad length.
-		serverHs := newServerHandshake(nodeID, idKeypair)
+		serverKeypair, err := ntor.NewKeypair(true)
+		if err != nil {
+			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
+		}
+		serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 		serverHs.padLen = l
 
 		// Parse the client handshake message.
@@ -158,7 +160,7 @@ func TestHandshakeNtor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ntor.NewKeypair failed: %s", err)
 	}
-	clientHs, err := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
+	clientHs := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
 	if err != nil {
 		t.Fatalf("newClientHandshake failed: %s", err)
 	}
@@ -168,7 +170,11 @@ func TestHandshakeNtor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clientHandshake.generateHandshake() (forced oversize) failed: %s", err)
 	}
-	serverHs := newServerHandshake(nodeID, idKeypair)
+	serverKeypair, err := ntor.NewKeypair(true)
+	if err != nil {
+		t.Fatalf("ntor.NewKeypair failed: %s", err)
+	}
+	serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
 	if err == nil {
 		t.Fatalf("serverHandshake.parseClientHandshake() succeded (oversized)")
@@ -180,7 +186,7 @@ func TestHandshakeNtor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clientHandshake.generateHandshake() (forced undersize) failed: %s", err)
 	}
-	serverHs = newServerHandshake(nodeID, idKeypair)
+	serverHs = newServerHandshake(nodeID, idKeypair, serverKeypair)
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
 	if err == nil {
 		t.Fatalf("serverHandshake.parseClientHandshake() succeded (undersized)")
@@ -198,7 +204,7 @@ func TestHandshakeNtor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clientHandshake.generateHandshake() failed: %s", err)
 	}
-	serverHs = newServerHandshake(nodeID, idKeypair)
+	serverHs = newServerHandshake(nodeID, idKeypair, serverKeypair)
 	serverHs.padLen = serverMaxPadLength + inlineSeedFrameLength + 1
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
 	if err != nil {

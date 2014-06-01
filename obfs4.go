@@ -159,7 +159,6 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 	}
 
 	defer func() {
-		// The session key is not needed past returning from this routine.
 		c.sessionKey = nil
 		if err != nil {
 			c.setBroken()
@@ -169,10 +168,7 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 	// Generate/send the client handshake.
 	var hs *clientHandshake
 	var blob []byte
-	hs, err = newClientHandshake(nodeID, publicKey, c.sessionKey)
-	if err != nil {
-		return
-	}
+	hs = newClientHandshake(nodeID, publicKey, c.sessionKey)
 	blob, err = hs.generateHandshake()
 	if err != nil {
 		return
@@ -231,12 +227,13 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 	}
 
 	defer func() {
+		c.sessionKey = nil
 		if err != nil {
 			c.setBroken()
 		}
 	}()
 
-	hs := newServerHandshake(nodeID, keypair)
+	hs := newServerHandshake(nodeID, keypair, c.sessionKey)
 	err = c.conn.SetDeadline(time.Now().Add(connectionTimeout))
 	if err != nil {
 		return
@@ -645,6 +642,17 @@ func (l *Obfs4Listener) AcceptObfs4() (*Obfs4Conn, error) {
 
 	// Allocate the obfs4 connection state.
 	cObfs := new(Obfs4Conn)
+
+	// Generate the session keypair *before* consuming data from the peer, to
+	// add more noise to the keypair generation time.  The idea is that jitter
+	// here is masked by network latency (the time it takes for a server to
+	// accept a socket out of the backlog should not be fixed, and the client
+	// needs to send the public key).
+	cObfs.sessionKey, err = ntor.NewKeypair(true)
+	if err != nil {
+		return nil, err
+	}
+
 	cObfs.conn = c
 	cObfs.isServer = true
 	cObfs.listener = l
