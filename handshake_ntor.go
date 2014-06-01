@@ -121,14 +121,9 @@ type clientHandshake struct {
 	serverMark           []byte
 }
 
-func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey) (*clientHandshake, error) {
-	var err error
-
+func newClientHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.PublicKey, sessionKey *ntor.Keypair) (*clientHandshake, error) {
 	hs := new(clientHandshake)
-	hs.keypair, err = ntor.NewKeypair(true)
-	if err != nil {
-		return nil, err
-	}
+	hs.keypair = sessionKey
 	hs.nodeID = nodeID
 	hs.serverIdentity = serverIdentity
 	hs.padLen = csrand.IntRange(clientMinPadLength, clientMaxPadLength)

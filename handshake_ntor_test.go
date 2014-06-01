@@ -43,9 +43,13 @@ func TestHandshakeNtor(t *testing.T) {
 	// Test client handshake padding.
 	for l := clientMinPadLength; l <= clientMaxPadLength; l++ {
 		// Generate the client state and override the pad length.
-		clientHs, err := newClientHandshake(nodeID, idKeypair.Public())
+		clientKeypair, err := ntor.NewKeypair(true)
 		if err != nil {
-			t.Fatalf("[%d:0] newClientHandshake failed:", l, err)
+			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
+		}
+		clientHs, err := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
+		if err != nil {
+			t.Fatalf("[%d:0] newClientHandshake failed: %s", l, err)
 		}
 		clientHs.padLen = l
 
@@ -99,9 +103,13 @@ func TestHandshakeNtor(t *testing.T) {
 	// Test server handshake padding.
 	for l := serverMinPadLength; l <= serverMaxPadLength+inlineSeedFrameLength; l++ {
 		// Generate the client state and override the pad length.
-		clientHs, err := newClientHandshake(nodeID, idKeypair.Public())
+		clientKeypair, err := ntor.NewKeypair(true)
 		if err != nil {
-			t.Fatalf("[%d:0] newClientHandshake failed:", l, err)
+			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
+		}
+		clientHs, err := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
+		if err != nil {
+			t.Fatalf("[%d:0] newClientHandshake failed: %s", l, err)
 		}
 		clientHs.padLen = clientMinPadLength
 
@@ -146,9 +154,13 @@ func TestHandshakeNtor(t *testing.T) {
 	}
 
 	// Test oversized client padding.
-	clientHs, err := newClientHandshake(nodeID, idKeypair.Public())
+	clientKeypair, err := ntor.NewKeypair(true)
 	if err != nil {
-		t.Fatalf("newClientHandshake failed:", err)
+		t.Fatalf("ntor.NewKeypair failed: %s", err)
+	}
+	clientHs, err := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
+	if err != nil {
+		t.Fatalf("newClientHandshake failed: %s", err)
 	}
 
 	clientHs.padLen = clientMaxPadLength + 1

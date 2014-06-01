@@ -69,6 +69,8 @@ const (
 type Obfs4Conn struct {
 	conn net.Conn
 
+	sessionKey *ntor.Keypair
+
 	lenProbDist *wDist
 	iatProbDist *wDist
 
@@ -157,6 +159,8 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 	}
 
 	defer func() {
+		// The session key is not needed past returning from this routine.
+		c.sessionKey = nil
 		if err != nil {
 			c.setBroken()
 		}
@@ -165,7 +169,7 @@ func (c *Obfs4Conn) clientHandshake(nodeID *ntor.NodeID, publicKey *ntor.PublicK
 	// Generate/send the client handshake.
 	var hs *clientHandshake
 	var blob []byte
-	hs, err = newClientHandshake(nodeID, publicKey)
+	hs, err = newClientHandshake(nodeID, publicKey, c.sessionKey)
 	if err != nil {
 		return
 	}
@@ -576,6 +580,14 @@ func DialObfs4DialFn(dialFn DialFn, network, address, nodeID, publicKey string, 
 		}
 		c.iatProbDist = newWDist(iatSeed, 0, maxIatDelay)
 	}
+
+	// Generate the session keypair *before* connecting to the remote peer.
+	c.sessionKey, err = ntor.NewKeypair(true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Connect to the remote peer.
 	c.conn, err = dialFn(network, address)
 	if err != nil {
 		return nil, err
