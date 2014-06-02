@@ -34,6 +34,7 @@ package obfs4
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"math/rand"
@@ -47,6 +48,8 @@ import (
 )
 
 const (
+	// SeedLength is the length of the obfs4 polymorphism seed.
+	SeedLength        = 32
 	headerLength      = framing.FrameOverhead + packetOverhead
 	connectionTimeout = time.Duration(30) * time.Second
 
@@ -299,7 +302,7 @@ func (c *Obfs4Conn) serverHandshake(nodeID *ntor.NodeID, keypair *ntor.Keypair) 
 	c.state = stateEstablished
 
 	// Send the PRNG seed as the first packet.
-	err = c.producePacket(&frameBuf, packetTypePrngSeed, c.listener.seed.Bytes()[:], 0)
+	err = c.producePacket(&frameBuf, packetTypePrngSeed, c.listener.rawSeed, 0)
 	if err != nil {
 		return
 	}
@@ -611,6 +614,7 @@ type Obfs4Listener struct {
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
 
+	rawSeed        []byte
 	seed           *drbg.Seed
 	iatSeed        *drbg.Seed
 	iatObfuscation bool
@@ -716,7 +720,11 @@ func ListenObfs4(network, laddr, nodeID, privateKey, seed string, iatObfuscation
 	if err != nil {
 		return nil, err
 	}
-	l.seed, err = drbg.SeedFromBase64(seed)
+	l.rawSeed, err = base64.StdEncoding.DecodeString(seed)
+	if err != nil {
+		return nil, err
+	}
+	l.seed, err = drbg.SeedFromBytes(l.rawSeed)
 	if err != nil {
 		return nil, err
 	}

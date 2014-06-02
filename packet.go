@@ -42,7 +42,7 @@ const (
 	packetOverhead          = 2 + 1
 	maxPacketPayloadLength  = framing.MaximumFramePayloadLength - packetOverhead
 	maxPacketPaddingLength  = maxPacketPayloadLength
-	seedPacketPayloadLength = drbg.SeedLength
+	seedPacketPayloadLength = SeedLength
 
 	consumeReadSize = framing.MaximumSegmentLength * 16
 )

@@ -219,7 +219,7 @@
 
    At the point that each side finishes the handshake, they have a 256 bit
    shared secret KEY_SEED that is then extracted/expanded via the ntor KDF to
-   produce the 128 bytes of keying material used to encrypt/authenticate the
+   produce the 144 bytes of keying material used to encrypt/authenticate the
    data.
 
    The keying material is used as follows:
@@ -227,10 +227,12 @@
      Bytes 000:031 - Server to Client 256 bit NaCl secretbox key.
      Bytes 032:047 - Server to Client 128 bit NaCl secretbox nonce prefix.
      Bytes 048:063 - Server to Client 128 bit SipHash-2-4 key.
+     Bytes 064:071 - Server to Client 64 bit SipHash-2-4 OFB IV.
 
-     Bytes 064:095 - Client to Server 256 bit NaCl secretbox key.
-     Bytes 096:111 - Client to Server NaCl secretbox nonce prefix.
-     Bytes 112:127 - Client to Server 128 bit SipHash-2-4 key.
+     Bytes 072:103 - Client to Server 256 bit NaCl secretbox key.
+     Bytes 104:119 - Client to Server NaCl secretbox nonce prefix.
+     Bytes 120:135 - Client to Server 128 bit SipHash-2-4 key.
+     Bytes 136:143 - Client to Server 64 bit SipHash-2-4 OFB IV.
 
 5. Data Transfer Phase
 
@@ -246,12 +248,18 @@
 
    The frame length refers to the length of the succeeding secretbox.  To
    avoid transmitting identifiable length fields in stream, the frame length
-   is obfuscated by XORing the value with the SipHash-2-4[4] digest of the
-   secretbox nonce, truncated to 2 bytes.  As the nonce is deterministic,
-   decoding the length is done by deriving the nonce that will be used to
-   unseal the next secret box, calculating the truncated SipHash-24 digest,
-   and XORing the digest with the obfuscated frame length to obtain the
-   length of the secretbox.
+   is obfuscated by XORing a mask derived from SipHash-2-4 in OFB mode.
+
+      K = The SipHash-2-4 key from the KDF.
+      IV[0] = The SipHash-2-4 OFB from the KDF.
+      For each packet:
+        IV[n] = SipHash-2-4(K, IV[n-1])
+        Mask[n] = First 2 bytes of IV[n]
+        obfuscatedLength = length ^ Mask[n]
+
+   As the receiver has the SipHash-2-4 key and IV, decoding the length is done
+   via deriving the mask used to obfsucate the length and XORing the truncated
+   digest to obtain the length of the secretbox.
 
    The payload length refers to the length of the payload portion of the frame
    and does not include the padding.  It is possible for the payload length to

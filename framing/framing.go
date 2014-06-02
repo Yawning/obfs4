@@ -32,6 +32,7 @@
 //    uint8_t[32] NaCl secretbox key
 //    uint8_t[16] NaCl Nonce prefix
 //    uint8_t[16] SipHash-2-4 key (used to obfsucate length)
+//    uint8_t[8]  SipHash-2-4 IV
 //
 // The frame format is:
 //   uint16_t length (obfsucated, big endian)
@@ -40,7 +41,12 @@
 //     uint8_t[]   payload
 //
 // The length field is length of the NaCl secretbox XORed with the truncated
-// SipHash-2-4 digest of the nonce used to seal/unseal the current secretbox.
+// SipHash-2-4 digest ran in OFB mode.
+//
+//     Initialize K, IV[0] with values from the shared secret.
+//     On each packet, IV[n] = H(K, IV[n - 1])
+//     mask[n] = IV[n][0:2]
+//     obfsLen = length ^ mask[n]
 //
 // The NaCl secretbox (Poly1305/XSalsa20) nonce format is:
 //     uint8_t[24] prefix (Fixed)
@@ -59,14 +65,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 
 	"code.google.com/p/go.crypto/nacl/secretbox"
 
-	"github.com/dchest/siphash"
-
 	"github.com/yawning/obfs4/csrand"
+	"github.com/yawning/obfs4/drbg"
 )
 
 const (
@@ -82,7 +86,7 @@ const (
 	MaximumFramePayloadLength = MaximumSegmentLength - FrameOverhead
 
 	// KeyLength is the length of the Encoder/Decoder secret key.
-	KeyLength = keyLength + noncePrefixLength + 16
+	KeyLength = keyLength + noncePrefixLength + drbg.SeedLength
 
 	maxFrameLength = MaximumSegmentLength - lengthLength
 	minFrameLength = FrameOverhead - lengthLength
@@ -146,8 +150,8 @@ func (nonce boxNonce) bytes(out *[nonceLength]byte) error {
 // Encoder is a frame encoder instance.
 type Encoder struct {
 	key   [keyLength]byte
-	sip   hash.Hash64
 	nonce boxNonce
+	drbg  *drbg.HashDrbg
 }
 
 // NewEncoder creates a new Encoder instance.  It must be supplied a slice
@@ -160,7 +164,11 @@ func NewEncoder(key []byte) *Encoder {
 	encoder := new(Encoder)
 	copy(encoder.key[:], key[0:keyLength])
 	encoder.nonce.init(key[keyLength : keyLength+noncePrefixLength])
-	encoder.sip = siphash.New(key[keyLength+noncePrefixLength:])
+	seed, err := drbg.SeedFromBytes(key[keyLength+noncePrefixLength:])
+	if err != nil {
+		panic(fmt.Sprintf("BUG: Failed to initialize DRBG: %s", err))
+	}
+	encoder.drbg = drbg.NewHashDrbg(seed)
 
 	return encoder
 }
@@ -190,9 +198,7 @@ func (encoder *Encoder) Encode(frame, payload []byte) (n int, err error) {
 
 	// Obfuscate the length.
 	length := uint16(len(box) - lengthLength)
-	encoder.sip.Write(nonce[:])
-	lengthMask := encoder.sip.Sum(nil)
-	encoder.sip.Reset()
+	lengthMask := encoder.drbg.NextBlock()
 	length ^= binary.BigEndian.Uint16(lengthMask)
 	binary.BigEndian.PutUint16(frame[:2], length)
 
@@ -204,7 +210,7 @@ func (encoder *Encoder) Encode(frame, payload []byte) (n int, err error) {
 type Decoder struct {
 	key   [keyLength]byte
 	nonce boxNonce
-	sip   hash.Hash64
+	drbg  *drbg.HashDrbg
 
 	nextNonce         [nonceLength]byte
 	nextLength        uint16
@@ -221,7 +227,11 @@ func NewDecoder(key []byte) *Decoder {
 	decoder := new(Decoder)
 	copy(decoder.key[:], key[0:keyLength])
 	decoder.nonce.init(key[keyLength : keyLength+noncePrefixLength])
-	decoder.sip = siphash.New(key[keyLength+noncePrefixLength:])
+	seed, err := drbg.SeedFromBytes(key[keyLength+noncePrefixLength:])
+	if err != nil {
+		panic(fmt.Sprintf("BUG: Failed to initialize DRBG: %s", err))
+	}
+	decoder.drbg = drbg.NewHashDrbg(seed)
 
 	return decoder
 }
@@ -253,9 +263,7 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 
 		// Deobfuscate the length field.
 		length := binary.BigEndian.Uint16(obfsLen[:])
-		decoder.sip.Write(decoder.nextNonce[:])
-		lengthMask := decoder.sip.Sum(nil)
-		decoder.sip.Reset()
+		lengthMask := decoder.drbg.NextBlock()
 		length ^= binary.BigEndian.Uint16(lengthMask)
 		if maxFrameLength < length || minFrameLength > length {
 			// Per "Plaintext Recovery Attacks Against SSH" by

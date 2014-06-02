@@ -46,6 +46,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -62,7 +63,7 @@ import (
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/yawning/obfs4"
-	"github.com/yawning/obfs4/drbg"
+	"github.com/yawning/obfs4/csrand"
 	"github.com/yawning/obfs4/ntor"
 )
 
@@ -390,15 +391,17 @@ func generateServerParams(id string) {
 		return
 	}
 
-	seed, err := drbg.NewSeed()
+	seed := make([]byte, obfs4.SeedLength)
+	err = csrand.Bytes(seed)
 	if err != nil {
 		fmt.Println("Failed to generate DRBG seed:", err)
 		return
 	}
+	seedBase64 := base64.StdEncoding.EncodeToString(seed)
 
 	fmt.Println("Generated private-key:", keypair.Private().Base64())
 	fmt.Println("Generated public-key:", keypair.Public().Base64())
-	fmt.Println("Generated drbg-seed:", seed.Base64())
+	fmt.Println("Generated drbg-seed:", seedBase64)
 	fmt.Println()
 	fmt.Println("Client config: ")
 	fmt.Printf("  Bridge obfs4 <IP Address:Port> %s node-id=%s public-key=%s\n",
@@ -406,7 +409,7 @@ func generateServerParams(id string) {
 	fmt.Println()
 	fmt.Println("Server config:")
 	fmt.Printf("  ServerTransportOptions obfs4 node-id=%s private-key=%s drbg-seed=%s\n",
-		parsedID.Base64(), keypair.Private().Base64(), seed.Base64())
+		parsedID.Base64(), keypair.Private().Base64(), seedBase64)
 }
 
 func main() {

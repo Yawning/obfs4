@@ -44,10 +44,10 @@ import (
 const Size = siphash.Size
 
 // SeedLength is the length of the HashDrbg seed.
-const SeedLength = 32
+const SeedLength = 16 + Size
 
 // Seed is the initial state for a HashDrbg.  It consists of a SipHash-2-4
-// key, and 16 bytes of initial data.
+// key, and 8 bytes of initial data.
 type Seed [SeedLength]byte
 
 // Bytes returns a pointer to the raw HashDrbg seed.
@@ -71,9 +71,10 @@ func NewSeed() (seed *Seed, err error) {
 	return
 }
 
-// SeedFromBytes creates a Seed from the raw bytes.
+// SeedFromBytes creates a Seed from the raw bytes, truncating to SeedLength as
+// appropriate.
 func SeedFromBytes(src []byte) (seed *Seed, err error) {
-	if len(src) != SeedLength {
+	if len(src) < SeedLength {
 		return nil, InvalidSeedLengthError(len(src))
 	}
 
@@ -83,7 +84,8 @@ func SeedFromBytes(src []byte) (seed *Seed, err error) {
 	return
 }
 
-// SeedFromBase64 creates a Seed from the Base64 representation.
+// SeedFromBase64 creates a Seed from the Base64 representation, truncating to
+// SeedLength as appropriate.
 func SeedFromBase64(encoded string) (seed *Seed, err error) {
 	var raw []byte
 	raw, err = base64.StdEncoding.DecodeString(encoded)
