@@ -334,24 +334,10 @@ func clientSetup() (launched bool) {
 	return
 }
 
-func ptGetStateDir() (dir string, err error) {
-	dir = os.Getenv("TOR_PT_STATE_LOCATION")
-	if dir == "" {
-		return
-	}
-
-	err = os.MkdirAll(dir, 0755)
-	if err != nil {
-		log.Fatalf("[ERROR] Failed to create path: %s", err)
-	}
-
-	return
-}
-
 func ptInitializeLogging(enable bool) error {
 	if enable {
 		// pt.MakeStateDir will ENV-ERROR for us.
-		dir, err := ptMakeStateDir()
+		dir, err := pt.MakeStateDir()
 		if err != nil {
 			return err
 		}

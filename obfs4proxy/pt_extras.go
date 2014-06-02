@@ -58,15 +58,6 @@ func ptProxyDone() {
 	pt.Stdout.Write(line)
 }
 
-func ptMakeStateDir() (string, error) {
-	dir := os.Getenv("TOR_PT_STATE_LOCATION")
-	if dir == "" {
-		return "", ptEnvError("no TOR_PT_STATE_LOCATION enviornment variable")
-	}
-	err := os.MkdirAll(dir, 0700)
-	return dir, err
-}
-
 func ptIsClient() (bool, error) {
 	clientEnv := os.Getenv("TOR_PT_CLIENT_TRANSPORTS")
 	serverEnv := os.Getenv("TOR_PT_SERVER_TRANSPORTS")
