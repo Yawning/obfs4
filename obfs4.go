@@ -41,6 +41,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yawning/obfs4/drbg"
 	"github.com/yawning/obfs4/framing"
 	"github.com/yawning/obfs4/ntor"
 )
@@ -561,7 +562,7 @@ func DialObfs4DialFn(dialFn DialFn, network, address, nodeID, publicKey string, 
 	}
 
 	// Generate the initial length obfuscation distribution.
-	seed, err := NewDrbgSeed()
+	seed, err := drbg.NewSeed()
 	if err != nil {
 		return nil, err
 	}
@@ -571,7 +572,7 @@ func DialObfs4DialFn(dialFn DialFn, network, address, nodeID, publicKey string, 
 	c.lenProbDist = newWDist(seed, 0, framing.MaximumSegmentLength)
 	if iatObfuscation {
 		iatSeedSrc := sha256.Sum256(seed.Bytes()[:])
-		iatSeed, err := DrbgSeedFromBytes(iatSeedSrc[:])
+		iatSeed, err := drbg.SeedFromBytes(iatSeedSrc[:])
 		if err != nil {
 			return nil, err
 		}
@@ -610,8 +611,8 @@ type Obfs4Listener struct {
 	keyPair *ntor.Keypair
 	nodeID  *ntor.NodeID
 
-	seed           *DrbgSeed
-	iatSeed        *DrbgSeed
+	seed           *drbg.Seed
+	iatSeed        *drbg.Seed
 	iatObfuscation bool
 
 	closeDelayBytes int
@@ -715,14 +716,14 @@ func ListenObfs4(network, laddr, nodeID, privateKey, seed string, iatObfuscation
 	if err != nil {
 		return nil, err
 	}
-	l.seed, err = DrbgSeedFromBase64(seed)
+	l.seed, err = drbg.SeedFromBase64(seed)
 	if err != nil {
 		return nil, err
 	}
 	l.iatObfuscation = iatObfuscation
 	if l.iatObfuscation {
 		iatSeedSrc := sha256.Sum256(l.seed.Bytes()[:])
-		l.iatSeed, err = DrbgSeedFromBytes(iatSeedSrc[:])
+		l.iatSeed, err = drbg.SeedFromBytes(iatSeedSrc[:])
 		if err != nil {
 			return nil, err
 		}
@@ -733,7 +734,7 @@ func ListenObfs4(network, laddr, nodeID, privateKey, seed string, iatObfuscation
 		return nil, err
 	}
 
-	rng := rand.New(newHashDrbg(l.seed))
+	rng := rand.New(drbg.NewHashDrbg(l.seed))
 	l.closeDelayBytes = rng.Intn(maxCloseDelayBytes)
 	l.closeDelay = rng.Intn(maxCloseDelay)
 

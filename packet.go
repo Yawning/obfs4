@@ -34,6 +34,7 @@ import (
 	"io"
 	"syscall"
 
+	"github.com/yawning/obfs4/drbg"
 	"github.com/yawning/obfs4/framing"
 )
 
@@ -41,7 +42,7 @@ const (
 	packetOverhead          = 2 + 1
 	maxPacketPayloadLength  = framing.MaximumFramePayloadLength - packetOverhead
 	maxPacketPaddingLength  = maxPacketPayloadLength
-	seedPacketPayloadLength = DrbgSeedLength
+	seedPacketPayloadLength = drbg.SeedLength
 
 	consumeReadSize = framing.MaximumSegmentLength * 16
 )
@@ -176,15 +177,15 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 		case packetTypePrngSeed:
 			// Only regenerate the distribution if we are the client.
 			if len(payload) == seedPacketPayloadLength && !c.isServer {
-				var seed *DrbgSeed
-				seed, err = DrbgSeedFromBytes(payload)
+				var seed *drbg.Seed
+				seed, err = drbg.SeedFromBytes(payload)
 				if err != nil {
 					break
 				}
 				c.lenProbDist.reset(seed)
 				if c.iatProbDist != nil {
 					iatSeedSrc := sha256.Sum256(seed.Bytes()[:])
-					iatSeed, err := DrbgSeedFromBytes(iatSeedSrc[:])
+					iatSeed, err := drbg.SeedFromBytes(iatSeedSrc[:])
 					if err != nil {
 						break
 					}

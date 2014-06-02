@@ -62,6 +62,7 @@ import (
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/yawning/obfs4"
+	"github.com/yawning/obfs4/drbg"
 	"github.com/yawning/obfs4/ntor"
 )
 
@@ -389,7 +390,7 @@ func generateServerParams(id string) {
 		return
 	}
 
-	seed, err := obfs4.NewDrbgSeed()
+	seed, err := drbg.NewSeed()
 	if err != nil {
 		fmt.Println("Failed to generate DRBG seed:", err)
 		return
