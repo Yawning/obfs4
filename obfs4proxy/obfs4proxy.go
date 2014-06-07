@@ -31,7 +31,7 @@
 //
 // Client usage (in torrc):
 //   UseBridges 1
-//   Bridge obfs4 X.X.X.X:YYYY <fingerprint> public-key=<Base64 Bridge public key> node-id=<Base64 Bridge Node ID>
+//   Bridge obfs4 X.X.X.X:YYYY <Fingerprint> public-key=<Base64 Bridge Public Key> node-id=<Base64 Bridge Node ID>
 //   ClientTransportPlugin obfs4 exec obfs4proxy
 //
 // Server usage (in torrc):
@@ -39,7 +39,7 @@
 //   ORPort 9001
 //   ExtORPort 6669
 //   ServerTransportPlugin obfs4 exec obfs4proxy
-//   ServerTransportOptions obfs4 private-key=<Base64 Bridge private key> node-id=<Base64 Node ID> drbg-seed=<Base64 DRBG seed>
+//   ServerTransportOptions obfs4 private-key=<Base64 Bridge Private Key> node-id=<Base64 Node ID> drbg-seed=<Base64 DRBG Seed>
 //
 // Because the pluggable transport requires arguments, obfs4proxy requires
 // tor-0.2.5.x to be useful.
@@ -357,12 +357,24 @@ func ptInitializeLogging(enable bool) error {
 }
 
 func generateServerParams(id string) {
-	rawID, err := hex.DecodeString(id)
-	if err != nil {
-		fmt.Println("Failed to hex decode id:", err)
-		return
-	}
+	idIsFP := id != ""
+	var rawID []byte
 
+	if idIsFP {
+		var err error
+		rawID, err = hex.DecodeString(id)
+		if err != nil {
+			fmt.Println("Failed to hex decode id:", err)
+			return
+		}
+	} else {
+		rawID = make([]byte, ntor.NodeIDLength)
+		err := csrand.Bytes(rawID)
+		if err != nil {
+			fmt.Println("Failed to generate random node-id:", err)
+			return
+		}
+	}
 	parsedID, err := ntor.NewNodeID(rawID)
 	if err != nil {
 		fmt.Println("Failed to parse id:", err)
@@ -390,8 +402,13 @@ func generateServerParams(id string) {
 	fmt.Println("Generated drbg-seed:", seedBase64)
 	fmt.Println()
 	fmt.Println("Client config: ")
-	fmt.Printf("  Bridge obfs4 <IP Address:Port> %s node-id=%s public-key=%s\n",
-		id, parsedID.Base64(), keypair.Public().Base64())
+	if idIsFP {
+		fmt.Printf("  Bridge obfs4 <IP Address:Port> %s node-id=%s public-key=%s\n",
+			id, parsedID.Base64(), keypair.Public().Base64())
+	} else {
+		fmt.Printf("  Bridge obfs4 <IP Address:Port> <Fingerprint> node-id=%s public-key=%s\n",
+			parsedID.Base64(), keypair.Public().Base64())
+	}
 	fmt.Println()
 	fmt.Println("Server config:")
 	fmt.Printf("  ServerTransportOptions obfs4 node-id=%s private-key=%s drbg-seed=%s\n",
@@ -400,13 +417,14 @@ func generateServerParams(id string) {
 
 func main() {
 	// Some command line args.
-	genParams := flag.String("genServerParams", "", "Generate server params given a bridge fingerprint.")
+	genParams := flag.Bool("genServerParams", false, "Generate Bridge operator torrc parameters")
+	genParamsFP := flag.String("genServerParamsFP", "", "Optional bridge fingerprint for genServerParams")
 	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
 	flag.BoolVar(&iatObfuscation, "iatObfuscation", false, "Enable IAT obufscation (EXPENSIVE)")
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
-	if *genParams != "" {
-		generateServerParams(*genParams)
+	if *genParams {
+		generateServerParams(*genParamsFP)
 		return
 	}
 
