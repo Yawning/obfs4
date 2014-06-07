@@ -30,6 +30,19 @@ Since a lot of the changes are to the handshaking process, it didn't make sense
 to extend ScrambleSuit as writing a server implementation that supported both
 handshake variants without being obscenely slow is non-trivial.
 
+### Dependencies
+
+Build time library dependencies are handled by go get automatically but are
+listed for clarity.
+
+ * Go 1.2.0 or later.  Debian stable packages Go 1.0.2 which is missing several
+   things obfs4 depends on like SHA256.
+ * go.crypto (https://code.google.com/p/go.crypto)
+ * go.net (https://code.google.com/p/go.net)
+ * ed25519/extra25519 (https://github.com/agl/ed25519/extra25519)
+ * SipHash-2-4 (https://github.com/dchest/siphash)
+ * goptlib (https://git.torproject.org/pluggable-transports/goptlib.git)
+
 ### TODO
 
  * Code cleanups.
@@ -45,6 +58,7 @@ handshake variants without being obscenely slow is non-trivial.
  * I do not care about older versions of the go runtime.
 
 ### Thanks
+
  * David Fifield for goptlib.
  * Adam Langley for his Elligator implementation.
  * Philipp Winter for the ScrambleSuit protocol which provided much of the
