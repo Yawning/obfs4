@@ -129,7 +129,7 @@ func (f *replayFilter) compactFilter(now int64) {
 			}
 		}
 		eNext := e.Next()
-		f.filter[entry.hash] = nil
+		delete(f.filter, entry.hash)
 		f.fifo.Remove(entry.element)
 		entry.element = nil
 		e = eNext
