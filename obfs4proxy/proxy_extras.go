@@ -32,7 +32,7 @@ import (
 
 	"code.google.com/p/go.net/proxy"
 
-	"github.com/yawning/obfs4"
+	"git.torproject.org/pluggable-transports/obfs4.git"
 )
 
 // getProxyDialer is a trival wrapper around the go.net/proxy package to avoid

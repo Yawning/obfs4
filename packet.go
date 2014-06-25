@@ -34,8 +34,8 @@ import (
 	"io"
 	"syscall"
 
-	"github.com/yawning/obfs4/drbg"
-	"github.com/yawning/obfs4/framing"
+	"git.torproject.org/pluggable-transports/obfs4.git/drbg"
+	"git.torproject.org/pluggable-transports/obfs4.git/framing"
 )
 
 const (

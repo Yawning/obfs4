@@ -62,9 +62,9 @@ import (
 	"syscall"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
-	"github.com/yawning/obfs4"
-	"github.com/yawning/obfs4/csrand"
-	"github.com/yawning/obfs4/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git"
+	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/ntor"
 )
 
 const (

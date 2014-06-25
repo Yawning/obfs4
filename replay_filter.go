@@ -34,7 +34,7 @@ import (
 
 	"github.com/dchest/siphash"
 
-	"github.com/yawning/obfs4/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
 )
 
 // maxFilterSize is the maximum capacity of the replay filter.  The busiest

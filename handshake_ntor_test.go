@@ -31,7 +31,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/yawning/obfs4/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git/ntor"
 )
 
 func TestHandshakeNtor(t *testing.T) {

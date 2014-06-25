@@ -38,9 +38,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/yawning/obfs4/csrand"
-	"github.com/yawning/obfs4/framing"
-	"github.com/yawning/obfs4/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/framing"
+	"git.torproject.org/pluggable-transports/obfs4.git/ntor"
 )
 
 const (
