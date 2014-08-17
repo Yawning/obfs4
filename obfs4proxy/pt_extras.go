@@ -124,7 +124,7 @@ func ptGetProxy() (*url.URL, error) {
 		return nil, ptProxyError(fmt.Sprintf("proxy URI has invalid scheme: %s", spec.Scheme))
 	}
 
-	err = validateAddrStr(spec.Host)
+	_, err = resolveAddrStr(spec.Host)
 	if err != nil {
 		return nil, ptProxyError(fmt.Sprintf("proxy URI has invalid host: %s", err))
 	}
@@ -135,27 +135,26 @@ func ptGetProxy() (*url.URL, error) {
 // Sigh, pt.resolveAddr() isn't exported.  Include our own getto version that
 // doesn't work around #7011, because we don't work with pre-0.2.5.x tor, and
 // all we care about is validation anyway.
-func validateAddrStr(addrStr string) error {
+func resolveAddrStr(addrStr string) (*net.TCPAddr, error) {
 	ipStr, portStr, err := net.SplitHostPort(addrStr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if ipStr == "" {
-		return net.InvalidAddrError(fmt.Sprintf("address string %q lacks a host part", addrStr))
+		return nil, net.InvalidAddrError(fmt.Sprintf("address string %q lacks a host part", addrStr))
 	}
 	if portStr == "" {
-		return net.InvalidAddrError(fmt.Sprintf("address string %q lacks a port part", addrStr))
+		return nil, net.InvalidAddrError(fmt.Sprintf("address string %q lacks a port part", addrStr))
 	}
-	if net.ParseIP(ipStr) == nil {
-		return net.InvalidAddrError(fmt.Sprintf("not an IP string: %q", ipStr))
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return nil, net.InvalidAddrError(fmt.Sprintf("not an IP string: %q", ipStr))
 	}
-	_, err = strconv.ParseUint(portStr, 10, 16)
+	port, err := strconv.ParseUint(portStr, 10, 16)
 	if err != nil {
-		return net.InvalidAddrError(fmt.Sprintf("not a Port string: %q", portStr))
+		return nil, net.InvalidAddrError(fmt.Sprintf("not a Port string: %q", portStr))
 	}
 
-	return nil
+	return &net.TCPAddr{IP: ip, Port: int(port), Zone: ""}, nil
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

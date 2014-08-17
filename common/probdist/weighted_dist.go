@@ -25,15 +25,18 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package obfs4
+// Package probdist implements a weighted probability distribution suitable for
+// protocol parameterization.  To allow for easy reproduction of a given
+// distribution, the drbg package is used as the random number source.
+package probdist
 
 import (
 	"container/list"
 	"fmt"
 	"math/rand"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
-	"git.torproject.org/pluggable-transports/obfs4.git/drbg"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/drbg"
 )
 
 const (
@@ -41,10 +44,11 @@ const (
 	maxValues = 100
 )
 
-// wDist is a weighted distribution.
-type wDist struct {
+// WeightedDist is a weighted distribution.
+type WeightedDist struct {
 	minValue int
 	maxValue int
+	biased   bool
 	values   []int
 	weights  []float64
 
@@ -52,23 +56,25 @@ type wDist struct {
 	prob  []float64
 }
 
-// newWDist creates a weighted distribution of values ranging from min to max
-// based on a HashDrbg initialized with seed.
-func newWDist(seed *drbg.Seed, min, max int) (w *wDist) {
-	w = &wDist{minValue: min, maxValue: max}
+// New creates a weighted distribution of values ranging from min to max
+// based on a HashDrbg initialized with seed.  Optionally, bias the weight
+// generation to match the ScrambleSuit non-uniform distribution from
+// obfsproxy.
+func New(seed *drbg.Seed, min, max int, biased bool) (w *WeightedDist) {
+	w = &WeightedDist{minValue: min, maxValue: max, biased: biased}
 
 	if max <= min {
 		panic(fmt.Sprintf("wDist.Reset(): min >= max (%d, %d)", min, max))
 	}
 
-	w.reset(seed)
+	w.Reset(seed)
 
 	return
 }
 
 // genValues creates a slice containing a random number of random values
 // that when scaled by adding minValue will fall into [min, max].
-func (w *wDist) genValues(rng *rand.Rand) {
+func (w *WeightedDist) genValues(rng *rand.Rand) {
 	nValues := (w.maxValue + 1) - w.minValue
 	values := rng.Perm(nValues)
 	if nValues < minValues {
@@ -83,11 +89,11 @@ func (w *wDist) genValues(rng *rand.Rand) {
 
 // genBiasedWeights generates a non-uniform weight list, similar to the
 // ScrambleSuit prob_dist module.
-func (w *wDist) genBiasedWeights(rng *rand.Rand) {
+func (w *WeightedDist) genBiasedWeights(rng *rand.Rand) {
 	w.weights = make([]float64, len(w.values))
 
 	culmProb := 0.0
-	for i := range w.values {
+	for i := range w.weights {
 		p := (1.0 - culmProb) * rng.Float64()
 		w.weights[i] = p
 		culmProb += p
@@ -95,7 +101,7 @@ func (w *wDist) genBiasedWeights(rng *rand.Rand) {
 }
 
 // genUniformWeights generates a uniform weight list.
-func (w *wDist) genUniformWeights(rng *rand.Rand) {
+func (w *WeightedDist) genUniformWeights(rng *rand.Rand) {
 	w.weights = make([]float64, len(w.values))
 	for i := range w.weights {
 		w.weights[i] = rng.Float64()
@@ -104,7 +110,7 @@ func (w *wDist) genUniformWeights(rng *rand.Rand) {
 
 // genTables calculates the alias and prob tables used for Vose's Alias method.
 // Algorithm taken from http://www.keithschwarz.com/darts-dice-coins/
-func (w *wDist) genTables() {
+func (w *WeightedDist) genTables() {
 	n := len(w.weights)
 	var sum float64
 	for _, weight := range w.weights {
@@ -179,20 +185,24 @@ func (w *wDist) genTables() {
 	w.alias = alias
 }
 
-// reset generates a new distribution with the same min/max based on a new seed.
-func (w *wDist) reset(seed *drbg.Seed) {
+// Reset generates a new distribution with the same min/max based on a new
+// seed.
+func (w *WeightedDist) Reset(seed *drbg.Seed) {
 	// Initialize the deterministic random number generator.
-	drbg := drbg.NewHashDrbg(seed)
+	drbg, _ := drbg.NewHashDrbg(seed)
 	rng := rand.New(drbg)
 
 	w.genValues(rng)
-	//w.genBiasedWeights(rng)
-	w.genUniformWeights(rng)
+	if w.biased {
+		w.genBiasedWeights(rng)
+	} else {
+		w.genUniformWeights(rng)
+	}
 	w.genTables()
 }
 
-// sample generates a random value according to the distribution.
-func (w *wDist) sample() int {
+// Sample generates a random value according to the distribution.
+func (w *WeightedDist) Sample() int {
 	var idx int
 
 	// Generate a fair die roll from an $n$-sided die; call the side $i$.
@@ -208,5 +218,3 @@ func (w *wDist) sample() int {
 
 	return w.minValue + w.values[idx]
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

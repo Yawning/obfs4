@@ -32,17 +32,16 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"syscall"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/drbg"
-	"git.torproject.org/pluggable-transports/obfs4.git/framing"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/drbg"
+	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs4/framing"
 )
 
 const (
 	packetOverhead          = 2 + 1
 	maxPacketPayloadLength  = framing.MaximumFramePayloadLength - packetOverhead
 	maxPacketPaddingLength  = maxPacketPayloadLength
-	seedPacketPayloadLength = SeedLength
+	seedPacketPayloadLength = seedLength
 
 	consumeReadSize = framing.MaximumSegmentLength * 16
 )
@@ -70,23 +69,13 @@ func (e InvalidPayloadLengthError) Error() string {
 
 var zeroPadBytes [maxPacketPaddingLength]byte
 
-func (c *Obfs4Conn) producePacket(w io.Writer, pktType uint8, data []byte, padLen uint16) (err error) {
+func (conn *obfs4Conn) makePacket(w io.Writer, pktType uint8, data []byte, padLen uint16) (err error) {
 	var pkt [framing.MaximumFramePayloadLength]byte
-
-	if !c.CanReadWrite() {
-		return syscall.EINVAL
-	}
 
 	if len(data)+int(padLen) > maxPacketPayloadLength {
 		panic(fmt.Sprintf("BUG: makePacket() len(data) + padLen > maxPacketPayloadLength: %d + %d > %d",
 			len(data), padLen, maxPacketPayloadLength))
 	}
-
-	defer func() {
-		if err != nil {
-			c.setBroken()
-		}
-	}()
 
 	// Packets are:
 	//   uint8_t type      packetTypePayload (0x00)
@@ -105,7 +94,7 @@ func (c *Obfs4Conn) producePacket(w io.Writer, pktType uint8, data []byte, padLe
 	// Encode the packet in an AEAD frame.
 	var frame [framing.MaximumSegmentLength]byte
 	frameLen := 0
-	frameLen, err = c.encoder.Encode(frame[:], pkt[:pktLen])
+	frameLen, err = conn.encoder.Encode(frame[:], pkt[:pktLen])
 	if err != nil {
 		// All encoder errors are fatal.
 		return
@@ -122,19 +111,17 @@ func (c *Obfs4Conn) producePacket(w io.Writer, pktType uint8, data []byte, padLe
 	return
 }
 
-func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
-	if !c.CanReadWrite() {
-		return n, syscall.EINVAL
-	}
-
+func (conn *obfs4Conn) readPackets() (err error) {
+	// Attempt to read off the network.
 	var buf [consumeReadSize]byte
-	rdLen, rdErr := c.conn.Read(buf[:])
-	c.receiveBuffer.Write(buf[:rdLen])
+	rdLen, rdErr := conn.Conn.Read(buf[:])
+	conn.receiveBuffer.Write(buf[:rdLen])
+
 	var decoded [framing.MaximumFramePayloadLength]byte
-	for c.receiveBuffer.Len() > 0 {
+	for conn.receiveBuffer.Len() > 0 {
 		// Decrypt an AEAD frame.
 		decLen := 0
-		decLen, err = c.decoder.Decode(decoded[:], &c.receiveBuffer)
+		decLen, err = conn.decoder.Decode(decoded[:], conn.receiveBuffer)
 		if err == framing.ErrAgain {
 			break
 		} else if err != nil {
@@ -157,56 +144,36 @@ func (c *Obfs4Conn) consumeFramedPackets(w io.Writer) (n int, err error) {
 		switch pktType {
 		case packetTypePayload:
 			if payloadLen > 0 {
-				if w != nil {
-					// c.WriteTo() skips buffering in c.receiveDecodedBuffer
-					var wrLen int
-					wrLen, err = w.Write(payload)
-					n += wrLen
-					if err != nil {
-						break
-					} else if wrLen < int(payloadLen) {
-						err = io.ErrShortWrite
-						break
-					}
-				} else {
-					// c.Read() stashes decoded payload in receiveDecodedBuffer
-					c.receiveDecodedBuffer.Write(payload)
-					n += int(payloadLen)
-				}
+				conn.receiveDecodedBuffer.Write(payload)
 			}
 		case packetTypePrngSeed:
 			// Only regenerate the distribution if we are the client.
-			if len(payload) == seedPacketPayloadLength && !c.isServer {
+			if len(payload) == seedPacketPayloadLength && !conn.isServer {
 				var seed *drbg.Seed
 				seed, err = drbg.SeedFromBytes(payload)
 				if err != nil {
 					break
 				}
-				c.lenProbDist.reset(seed)
-				if c.iatProbDist != nil {
+				conn.lenDist.Reset(seed)
+				if conn.iatDist != nil {
 					iatSeedSrc := sha256.Sum256(seed.Bytes()[:])
 					iatSeed, err := drbg.SeedFromBytes(iatSeedSrc[:])
 					if err != nil {
 						break
 					}
-					c.iatProbDist.reset(iatSeed)
+					conn.iatDist.Reset(iatSeed)
 				}
 			}
 		default:
-			// Ignore unrecognised packet types.
+			// Ignore unknown packet types.
 		}
 	}
 
-	// Read errors and non-framing.ErrAgain errors are all fatal.
-	if (err != nil && err != framing.ErrAgain) || rdErr != nil {
-		// Propagate read errors correctly.
-		if err == nil && rdErr != nil {
-			err = rdErr
-		}
-		c.setBroken()
+	// Read errors (all fatal) take priority over various frame processing
+	// errors.
+	if rdErr != nil {
+		return rdErr
 	}
 
 	return
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

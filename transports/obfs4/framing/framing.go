@@ -69,8 +69,8 @@ import (
 
 	"code.google.com/p/go.crypto/nacl/secretbox"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
-	"git.torproject.org/pluggable-transports/obfs4.git/drbg"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/drbg"
 )
 
 const (
@@ -168,7 +168,7 @@ func NewEncoder(key []byte) *Encoder {
 	if err != nil {
 		panic(fmt.Sprintf("BUG: Failed to initialize DRBG: %s", err))
 	}
-	encoder.drbg = drbg.NewHashDrbg(seed)
+	encoder.drbg, _ = drbg.NewHashDrbg(seed)
 
 	return encoder
 }
@@ -231,7 +231,7 @@ func NewDecoder(key []byte) *Decoder {
 	if err != nil {
 		panic(fmt.Sprintf("BUG: Failed to initialize DRBG: %s", err))
 	}
-	decoder.drbg = drbg.NewHashDrbg(seed)
+	decoder.drbg, _ = drbg.NewHashDrbg(seed)
 
 	return decoder
 }
@@ -306,5 +306,3 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 
 	return len(out), nil
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

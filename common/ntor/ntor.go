@@ -25,7 +25,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-//
 // Package ntor implements the Tor Project's ntor handshake as defined in
 // proposal 216 "Improved circuit-creation key exchange".  It also supports
 // using Elligator to transform the Curve25519 public keys sent over the wire
@@ -33,7 +32,6 @@
 //
 // Before using this package, it is strongly recommended that the specification
 // is read and understood.
-//
 package ntor
 
 import (
@@ -50,7 +48,7 @@ import (
 
 	"github.com/agl/ed25519/extra25519"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
 )
 
 const (
@@ -267,8 +265,7 @@ func NewKeypair(elligator bool) (*Keypair, error) {
 		// Generate a Curve25519 private key.  Like everyone who does this,
 		// run the CSPRNG output through SHA256 for extra tinfoil hattery.
 		priv := keypair.private.Bytes()[:]
-		err := csrand.Bytes(priv)
-		if err != nil {
+		if err := csrand.Bytes(priv); err != nil {
 			return nil, err
 		}
 		digest := sha256.Sum256(priv)
@@ -433,5 +430,3 @@ func Kdf(keySeed []byte, okmLen int) []byte {
 
 	return okm
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

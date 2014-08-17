@@ -108,7 +108,6 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	return conn, nil
 }
 
-// httpConn is the mountain of bullshit we need to do just for staleReader.
 type httpConn struct {
 	remoteAddr   *net.TCPAddr
 	httpConn     *httputil.ClientConn
@@ -157,5 +156,3 @@ func (c *httpConn) SetWriteDeadline(t time.Time) error {
 func init() {
 	proxy.RegisterDialerType("http", newHTTP)
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

@@ -25,13 +25,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package obfs4
+package probdist
 
 import (
 	"fmt"
 	"testing"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/drbg"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/drbg"
 )
 
 const debug = false
@@ -46,7 +46,7 @@ func TestWeightedDist(t *testing.T) {
 
 	hist := make([]int, 1000)
 
-	w := newWDist(seed, 0, 999)
+	w := New(seed, 0, 999, true)
 	if debug {
 		// Dump a string representation of the probability table.
 		fmt.Println("Table:")
@@ -64,7 +64,7 @@ func TestWeightedDist(t *testing.T) {
 	}
 
 	for i := 0; i < nrTrials; i++ {
-		value := w.sample()
+		value := w.Sample()
 		hist[value]++
 	}
 
@@ -78,5 +78,3 @@ func TestWeightedDist(t *testing.T) {
 		}
 	}
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

@@ -38,9 +38,10 @@ import (
 	"strconv"
 	"time"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
-	"git.torproject.org/pluggable-transports/obfs4.git/framing"
-	"git.torproject.org/pluggable-transports/obfs4.git/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/replayfilter"
+	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs4/framing"
 )
 
 const (
@@ -247,7 +248,7 @@ func newServerHandshake(nodeID *ntor.NodeID, serverIdentity *ntor.Keypair, sessi
 	return hs
 }
 
-func (hs *serverHandshake) parseClientHandshake(filter *replayFilter, resp []byte) ([]byte, error) {
+func (hs *serverHandshake) parseClientHandshake(filter *replayfilter.ReplayFilter, resp []byte) ([]byte, error) {
 	// No point in examining the data unless the miminum plausible response has
 	// been received.
 	if clientMinHandshakeLength > len(resp) {
@@ -287,7 +288,7 @@ func (hs *serverHandshake) parseClientHandshake(filter *replayFilter, resp []byt
 		macRx := resp[pos+markLength : pos+markLength+macLength]
 		if hmac.Equal(macCmp, macRx) {
 			// Ensure that this handshake has not been seen previously.
-			if filter.testAndSet(time.Now().Unix(), macRx) {
+			if filter.TestAndSet(time.Now(), macRx) {
 				// The client either happened to generate exactly the same
 				// session key and padding, or someone is replaying a previous
 				// handshake.  In either case, fuck them.
@@ -423,5 +424,3 @@ func makePad(padLen int) ([]byte, error) {
 
 	return pad, err
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

@@ -31,14 +31,15 @@ import (
 	"bytes"
 	"testing"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/replayfilter"
 )
 
 func TestHandshakeNtor(t *testing.T) {
 	// Generate the server node id and id keypair.
 	nodeID, _ := ntor.NewNodeID([]byte("\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13"))
 	idKeypair, _ := ntor.NewKeypair(false)
-	serverFilter, _ := newReplayFilter()
+	serverFilter, _ := replayfilter.New(replayTTL)
 
 	// Test client handshake padding.
 	for l := clientMinPadLength; l <= clientMaxPadLength; l++ {

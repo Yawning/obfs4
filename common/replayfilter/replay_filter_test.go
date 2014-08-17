@@ -25,55 +25,58 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package obfs4
+package replayfilter
 
 import (
 	"testing"
+	"time"
 )
 
 func TestReplayFilter(t *testing.T) {
-	f, err := newReplayFilter()
+	ttl := 10 * time.Second
+
+	f, err := New(ttl)
 	if err != nil {
 		t.Fatal("newReplayFilter failed:", err)
 	}
 
 	buf := []byte("This is a test of the Emergency Broadcast System.")
-	var now int64 = 3600
+	now := time.Now()
 
 	// testAndSet into empty filter, returns false (not present).
-	set := f.testAndSet(now, buf)
+	set := f.TestAndSet(now, buf)
 	if set {
-		t.Fatal("testAndSet empty filter returned true")
+		t.Fatal("TestAndSet empty filter returned true")
 	}
 
 	// testAndSet into filter containing entry, should return true(present).
-	set = f.testAndSet(now, buf)
+	set = f.TestAndSet(now, buf)
 	if !set {
 		t.Fatal("testAndSet populated filter (replayed) returned false")
 	}
 
 	buf2 := []byte("This concludes this test of the Emergency Broadcast System.")
-	now += 3600 * 2
+	now = now.Add(ttl)
 
 	// testAndSet with time advanced.
-	set = f.testAndSet(now, buf2)
+	set = f.TestAndSet(now, buf2)
 	if set {
 		t.Fatal("testAndSet populated filter, 2nd entry returned true")
 	}
-	set = f.testAndSet(now, buf2)
+	set = f.TestAndSet(now, buf2)
 	if !set {
 		t.Fatal("testAndSet populated filter, 2nd entry (replayed) returned false")
 	}
 
 	// Ensure that the first entry has been removed by compact.
-	set = f.testAndSet(now, buf)
+	set = f.TestAndSet(now, buf)
 	if set {
 		t.Fatal("testAndSet populated filter, compact check returned true")
 	}
 
 	// Ensure that the filter gets reaped if the clock jumps backwards.
-	now = 0
-	set = f.testAndSet(now, buf)
+	now = time.Time{}
+	set = f.TestAndSet(now, buf)
 	if set {
 		t.Fatal("testAndSet populated filter, backward time jump returned true")
 	}
@@ -85,7 +88,7 @@ func TestReplayFilter(t *testing.T) {
 	}
 
 	// Ensure that the entry is properly added after reaping.
-	set = f.testAndSet(now, buf)
+	set = f.TestAndSet(now, buf)
 	if !set {
 		t.Fatal("testAndSet populated filter, post-backward clock jump (replayed) returned false")
 	}

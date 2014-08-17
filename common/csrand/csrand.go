@@ -29,7 +29,7 @@
 // with some utility functions for common random number/byte related tasks.
 //
 // Not all of the convinience routines are replicated, only those that are
-// useful for obfs4.  The CsRand variable provides access to the full math/rand
+// immediately useful.  The Rand variable provides access to the full math/rand
 // API.
 package csrand
 
@@ -44,8 +44,8 @@ import (
 var (
 	csRandSourceInstance csRandSource
 
-	// CsRand is a math/rand instance backed by crypto/rand CSPRNG.
-	CsRand = rand.New(csRandSourceInstance)
+	// Rand is a math/rand instance backed by crypto/rand CSPRNG.
+	Rand = rand.New(csRandSourceInstance)
 )
 
 type csRandSource struct {
@@ -54,8 +54,7 @@ type csRandSource struct {
 
 func (r csRandSource) Int63() int64 {
 	var src [8]byte
-	err := Bytes(src[:])
-	if err != nil {
+	if err := Bytes(src[:]); err != nil {
 		panic(err)
 	}
 	val := binary.BigEndian.Uint64(src[:])
@@ -70,12 +69,12 @@ func (r csRandSource) Seed(seed int64) {
 
 // Intn returns, as a int, a pseudo random number in [0, n).
 func Intn(n int) int {
-	return CsRand.Intn(n)
+	return Rand.Intn(n)
 }
 
 // Float64 returns, as a float64, a pesudo random number in [0.0,1.0).
 func Float64() float64 {
-	return CsRand.Float64()
+	return Rand.Float64()
 }
 
 // IntRange returns a uniformly distributed int [min, max].
@@ -85,18 +84,18 @@ func IntRange(min, max int) int {
 	}
 
 	r := (max + 1) - min
-	ret := CsRand.Intn(r)
+	ret := Rand.Intn(r)
 	return ret + min
 }
 
 // Bytes fills the slice with random data.
 func Bytes(buf []byte) error {
-	_, err := io.ReadFull(cryptRand.Reader, buf)
-	if err != nil {
+	if _, err := io.ReadFull(cryptRand.Reader, buf); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-/* vim :set ts=4 sw=4 sts=4 noet : */
+// Reader is a alias of rand.Reader.
+var Reader = cryptRand.Reader

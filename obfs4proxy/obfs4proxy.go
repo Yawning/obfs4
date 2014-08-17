@@ -23,31 +23,13 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * This file is based off goptlib's dummy-[client,server].go files.
  */
 
-// obfs4 pluggable transport.  Works only as a managed proxy.
-//
-// Client usage (in torrc):
-//   UseBridges 1
-//   Bridge obfs4 X.X.X.X:YYYY <Fingerprint> public-key=<Base64 Bridge Public Key> node-id=<Base64 Bridge Node ID>
-//   ClientTransportPlugin obfs4 exec obfs4proxy
-//
-// Server usage (in torrc):
-//   BridgeRelay 1
-//   ORPort 9001
-//   ExtORPort 6669
-//   ServerTransportPlugin obfs4 exec obfs4proxy
-//   ServerTransportOptions obfs4 private-key=<Base64 Bridge Private Key> node-id=<Base64 Node ID> drbg-seed=<Base64 DRBG Seed>
-//
-// Because the pluggable transport requires arguments, obfs4proxy requires
-// tor-0.2.5.x to be useful.
+// Go language Tor Pluggable Transport suite.  Works only as a managed
+// client/server.
 package main
 
 import (
-	"encoding/base64"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -61,247 +43,44 @@ import (
 	"sync"
 	"syscall"
 
+	"code.google.com/p/go.net/proxy"
+
 	"git.torproject.org/pluggable-transports/goptlib.git"
-	"git.torproject.org/pluggable-transports/obfs4.git"
-	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
-	"git.torproject.org/pluggable-transports/obfs4.git/ntor"
+	"git.torproject.org/pluggable-transports/obfs4.git/transports"
+	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
 )
 
 const (
-	obfs4Method  = "obfs4"
-	obfs4LogFile = "obfs4proxy.log"
+	obfs4proxyLogFile = "obfs4proxy.log"
+	socksAddr         = "127.0.0.1:0"
+	elidedAddr        = "[scrubbed]"
 )
 
 var enableLogging bool
 var unsafeLogging bool
-var iatObfuscation bool
-var ptListeners []net.Listener
+var stateDir string
+var handlerChan chan int
 
-// When a connection handler starts, +1 is written to this channel; when it
-// ends, -1 is written.
-var handlerChan = make(chan int)
+// DialFn is a function pointer to a function that matches the net.Dialer.Dial
+// interface.
+type DialFn func(string, string) (net.Conn, error)
 
-func logAndRecover(conn *obfs4.Obfs4Conn) {
-	if err := recover(); err != nil {
-		log.Printf("[ERROR] %p: Panic: %s", conn, err)
-	}
-}
-
-func copyLoop(a net.Conn, b *obfs4.Obfs4Conn) {
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer logAndRecover(b)
-		defer wg.Done()
-		defer b.Close()
-		defer a.Close()
-
-		_, err := io.Copy(b, a)
-		if err != nil {
-			log.Printf("[WARN] copyLoop: %p: Connection closed: %s", b, err)
-		}
-	}()
-	go func() {
-		defer logAndRecover(b)
-		defer wg.Done()
-		defer a.Close()
-		defer b.Close()
-
-		_, err := io.Copy(a, b)
-		if err != nil {
-			log.Printf("[WARN] copyLoop: %p: Connection closed: %s", b, err)
-		}
-	}()
-
-	wg.Wait()
-}
-
-func serverHandler(conn *obfs4.Obfs4Conn, info *pt.ServerInfo) error {
-	defer conn.Close()
-	defer logAndRecover(conn)
-
-	handlerChan <- 1
-	defer func() {
-		handlerChan <- -1
-	}()
-
-	var addr string
+func elideAddr(addrStr string) string {
 	if unsafeLogging {
-		addr = conn.RemoteAddr().String()
-	} else {
-		addr = "[scrubbed]"
+		return addrStr
 	}
 
-	log.Printf("[INFO] server: %p: New connection from %s", conn, addr)
-
-	// Handshake with the client.
-	err := conn.ServerHandshake()
-	if err != nil {
-		log.Printf("[WARN] server: %p: Handshake failed: %s", conn, err)
-		return err
+	if addr, err := resolveAddrStr(addrStr); err == nil {
+		// Only scrub off the address so that it's slightly easier to follow
+		// the logs by looking at the port.
+		return fmt.Sprintf("%s:%d", elidedAddr, addr.Port)
 	}
 
-	or, err := pt.DialOr(info, conn.RemoteAddr().String(), obfs4Method)
-	if err != nil {
-		log.Printf("[ERROR] server: %p: DialOr failed: %s", conn, err)
-		return err
-	}
-	defer or.Close()
-
-	copyLoop(or, conn)
-
-	return nil
+	return elidedAddr
 }
 
-func serverAcceptLoop(ln *obfs4.Obfs4Listener, info *pt.ServerInfo) error {
-	defer ln.Close()
-	for {
-		conn, err := ln.AcceptObfs4()
-		if err != nil {
-			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				return err
-			}
-			continue
-		}
-		go serverHandler(conn, info)
-	}
-}
-
-func serverSetup() (launched bool) {
-	// Initialize pt logging.
-	err := ptInitializeLogging(enableLogging)
-	if err != nil {
-		return
-	}
-
-	ptServerInfo, err := pt.ServerSetup([]string{obfs4Method})
-	if err != nil {
-		return
-	}
-
-	for _, bindaddr := range ptServerInfo.Bindaddrs {
-		switch bindaddr.MethodName {
-		case obfs4Method:
-			// Handle the mandetory arguments.
-			privateKey, ok := bindaddr.Options.Get("private-key")
-			if !ok {
-				pt.SmethodError(bindaddr.MethodName, "needs a private-key option")
-				break
-			}
-			nodeID, ok := bindaddr.Options.Get("node-id")
-			if !ok {
-				pt.SmethodError(bindaddr.MethodName, "needs a node-id option")
-				break
-			}
-			seed, ok := bindaddr.Options.Get("drbg-seed")
-			if !ok {
-				pt.SmethodError(bindaddr.MethodName, "needs a drbg-seed option")
-				break
-			}
-
-			// Initialize the listener.
-			ln, err := obfs4.ListenObfs4("tcp", bindaddr.Addr.String(), nodeID,
-				privateKey, seed, iatObfuscation)
-			if err != nil {
-				pt.SmethodError(bindaddr.MethodName, err.Error())
-				break
-			}
-
-			// Report the SMETHOD including the parameters.
-			args := pt.Args{}
-			args.Add("node-id", nodeID)
-			args.Add("public-key", ln.PublicKey())
-			go serverAcceptLoop(ln, &ptServerInfo)
-			pt.SmethodArgs(bindaddr.MethodName, ln.Addr(), args)
-			ptListeners = append(ptListeners, ln)
-			launched = true
-		default:
-			pt.SmethodError(bindaddr.MethodName, "no such method")
-		}
-	}
-	pt.SmethodsDone()
-
-	return
-}
-
-func clientHandler(conn *pt.SocksConn, proxyURI *url.URL) error {
-	defer conn.Close()
-
-	var addr string
-	if unsafeLogging {
-		addr = conn.Req.Target
-	} else {
-		addr = "[scrubbed]"
-	}
-
-	log.Printf("[INFO] client: New connection to %s", addr)
-
-	// Extract the peer's node ID and public key.
-	nodeID, ok := conn.Req.Args.Get("node-id")
-	if !ok {
-		log.Printf("[ERROR] client: missing node-id argument")
-		conn.Reject()
-		return nil
-	}
-	publicKey, ok := conn.Req.Args.Get("public-key")
-	if !ok {
-		log.Printf("[ERROR] client: missing public-key argument")
-		conn.Reject()
-		return nil
-	}
-
-	handlerChan <- 1
-	defer func() {
-		handlerChan <- -1
-	}()
-
-	defer logAndRecover(nil)
-	dialFn, err := getProxyDialer(proxyURI)
-	if err != nil {
-		log.Printf("[ERROR] client: failed to get proxy dialer: %s", err)
-		conn.Reject()
-		return err
-	}
-	remote, err := obfs4.DialObfs4DialFn(dialFn, "tcp", conn.Req.Target, nodeID, publicKey, iatObfuscation)
-	if err != nil {
-		log.Printf("[ERROR] client: %p: Handshake failed: %s", remote, err)
-		conn.Reject()
-		return err
-	}
-	defer remote.Close()
-	err = conn.Grant(remote.RemoteAddr().(*net.TCPAddr))
-	if err != nil {
-		return err
-	}
-
-	copyLoop(conn, remote)
-
-	return nil
-}
-
-func clientAcceptLoop(ln *pt.SocksListener, proxyURI *url.URL) error {
-	defer ln.Close()
-	for {
-		conn, err := ln.AcceptSocks()
-		if err != nil {
-			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				return err
-			}
-			continue
-		}
-		go clientHandler(conn, proxyURI)
-	}
-}
-
-func clientSetup() (launched bool) {
-	// Initialize pt logging.
-	err := ptInitializeLogging(enableLogging)
-	if err != nil {
-		return
-	}
-
-	ptClientInfo, err := pt.ClientSetup([]string{obfs4Method})
+func clientSetup() (launched bool, listeners []net.Listener) {
+	ptClientInfo, err := pt.ClientSetup(transports.Transports())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -313,40 +92,258 @@ func clientSetup() (launched bool) {
 		ptProxyDone()
 	}
 
-	for _, methodName := range ptClientInfo.MethodNames {
-		switch methodName {
-		case obfs4Method:
-			ln, err := pt.ListenSocks("tcp", "127.0.0.1:0")
-			if err != nil {
-				pt.CmethodError(methodName, err.Error())
-				break
-			}
-			go clientAcceptLoop(ln, ptClientProxy)
-			pt.Cmethod(methodName, ln.Version(), ln.Addr())
-			ptListeners = append(ptListeners, ln)
-			launched = true
-		default:
-			pt.CmethodError(methodName, "no such method")
+	// Launch each of the client listeners.
+	for _, name := range ptClientInfo.MethodNames {
+		t := transports.Get(name)
+		if t == nil {
+			pt.CmethodError(name, "no such transport is supported")
+			continue
 		}
+
+		f, err := t.ClientFactory(stateDir)
+		if err != nil {
+			pt.CmethodError(name, "failed to get ClientFactory")
+			continue
+		}
+
+		ln, err := pt.ListenSocks("tcp", socksAddr)
+		if err != nil {
+			pt.CmethodError(name, err.Error())
+			continue
+		}
+
+		go clientAcceptLoop(f, ln, ptClientProxy)
+		pt.Cmethod(name, ln.Version(), ln.Addr())
+
+		log.Printf("[INFO]: %s - registered listener: %s", name, ln.Addr())
+
+		listeners = append(listeners, ln)
+		launched = true
 	}
 	pt.CmethodsDone()
 
 	return
 }
 
-func ptInitializeLogging(enable bool) error {
-	if enable {
-		// pt.MakeStateDir will ENV-ERROR for us.
-		dir, err := pt.MakeStateDir()
+func clientAcceptLoop(f base.ClientFactory, ln *pt.SocksListener, proxyURI *url.URL) error {
+	defer ln.Close()
+	for {
+		conn, err := ln.AcceptSocks()
 		if err != nil {
-			return err
+			if e, ok := err.(net.Error); ok && !e.Temporary() {
+				return err
+			}
+			continue
+		}
+		go clientHandler(f, conn, proxyURI)
+	}
+}
+
+func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) {
+	defer conn.Close()
+	handlerChan <- 1
+	defer func() {
+		handlerChan <- -1
+	}()
+
+	name := f.Transport().Name()
+	addrStr := elideAddr(conn.Req.Target)
+	log.Printf("[INFO]: %s(%s) - new connection", name, addrStr)
+
+	// Deal with arguments.
+	args, err := f.ParseArgs(&conn.Req.Args)
+	if err != nil {
+		log.Printf("[ERROR]: %s(%s) - invalid arguments: %s", name, addrStr, err)
+		conn.Reject()
+		return
+	}
+
+	// Obtain the proxy dialer if any, and create the outgoing TCP connection.
+	var dialFn DialFn
+	if proxyURI == nil {
+		dialFn = proxy.Direct.Dial
+	} else {
+		// This is unlikely to happen as the proxy protocol is verified during
+		// the configuration phase.
+		dialer, err := proxy.FromURL(proxyURI, proxy.Direct)
+		if err != nil {
+			log.Printf("[ERROR]: %s(%s) - failed to obtain proxy dialer: %s", name, addrStr, err)
+			conn.Reject()
+			return
+		}
+		dialFn = dialer.Dial
+	}
+	remoteConn, err := dialFn("tcp", conn.Req.Target) // XXX: Allow UDP?
+	if err != nil {
+		// Note: The error message returned from the dialer can include the IP
+		// address/port of the remote peer.
+		if unsafeLogging {
+			log.Printf("[ERROR]: %s(%s) - outgoing connection failed: %s", name, addrStr, err)
+		} else {
+			log.Printf("[ERROR]: %s(%s) - outgoing connection failed", name, addrStr)
+		}
+		conn.Reject()
+		return
+	}
+	defer remoteConn.Close()
+
+	// Instantiate the client transport method, handshake, and start pushing
+	// bytes back and forth.
+	remote, err := f.WrapConn(remoteConn, args)
+	if err != nil {
+		log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, err)
+		conn.Reject()
+		return
+	}
+	err = conn.Grant(remoteConn.RemoteAddr().(*net.TCPAddr))
+	if err != nil {
+		log.Printf("[ERROR]: %s(%s) - SOCKS grant failed: %s", name, addrStr, err)
+		return
+	}
+
+	err = copyLoop(conn, remote)
+	if err != nil {
+		log.Printf("[INFO]: %s(%s) - closed connection: %s", name, addrStr, err)
+	} else {
+		log.Printf("[INFO]: %s(%s) - closed connection", name, addrStr)
+	}
+
+	return
+}
+
+func serverSetup() (launched bool, listeners []net.Listener) {
+	ptServerInfo, err := pt.ServerSetup(transports.Transports())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, bindaddr := range ptServerInfo.Bindaddrs {
+		name := bindaddr.MethodName
+		t := transports.Get(name)
+		if t == nil {
+			pt.SmethodError(name, "no such transport is supported")
+			continue
 		}
 
+		f, err := t.ServerFactory(stateDir, &bindaddr.Options)
+		if err != nil {
+			pt.SmethodError(name, err.Error())
+			continue
+		}
+
+		ln, err := net.ListenTCP("tcp", bindaddr.Addr)
+		if err != nil {
+			pt.SmethodError(name, err.Error())
+		}
+
+		go serverAcceptLoop(f, ln, &ptServerInfo)
+		if args := f.Args(); args != nil {
+			pt.SmethodArgs(name, ln.Addr(), *args)
+		} else {
+			pt.SmethodArgs(name, ln.Addr(), nil)
+		}
+
+		log.Printf("[INFO]: %s - registered listener: %s", name, elideAddr(ln.Addr().String()))
+
+		listeners = append(listeners, ln)
+		launched = true
+	}
+	pt.SmethodsDone()
+
+	return
+}
+
+func serverAcceptLoop(f base.ServerFactory, ln net.Listener, info *pt.ServerInfo) error {
+	defer ln.Close()
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			if e, ok := err.(net.Error); ok && !e.Temporary() {
+				return err
+			}
+			continue
+		}
+		go serverHandler(f, conn, info)
+	}
+}
+
+func serverHandler(f base.ServerFactory, conn net.Conn, info *pt.ServerInfo) {
+	defer conn.Close()
+	handlerChan <- 1
+	defer func() {
+		handlerChan <- -1
+	}()
+
+	name := f.Transport().Name()
+	addrStr := elideAddr(conn.RemoteAddr().String())
+	log.Printf("[INFO]: %s(%s) - new connection", name, addrStr)
+
+	// Instantiate the server transport method and handshake.
+	remote, err := f.WrapConn(conn)
+	if err != nil {
+		log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, err)
+		return
+	}
+
+	// Connect to the orport.
+	orConn, err := pt.DialOr(info, conn.RemoteAddr().String(), name)
+	if err != nil {
+		log.Printf("[ERROR]: %s(%s) - failed to connect to ORPort: %s", name, addrStr, err)
+		return
+	}
+	defer orConn.Close()
+
+	err = copyLoop(orConn, remote)
+	if err != nil {
+		log.Printf("[INFO]: %s(%s) - closed connection: %s", name, addrStr, err)
+	} else {
+		log.Printf("[INFO]: %s(%s) - closed connection", name, addrStr)
+	}
+
+	return
+}
+
+func copyLoop(a net.Conn, b net.Conn) error {
+	// Note: b is always the pt connection.  a is the SOCKS/ORPort connection.
+	errChan := make(chan error, 2)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		defer b.Close()
+		defer a.Close()
+		_, err := io.Copy(b, a)
+		errChan <- err
+	}()
+	go func() {
+		defer wg.Done()
+		defer a.Close()
+		defer b.Close()
+		_, err := io.Copy(a, b)
+		errChan <- err
+	}()
+
+	// Wait for both upstream and downstream to close.  Since one side
+	// terminating closes the other, the second error in the channel will be
+	// something like EINVAL (though io.Copy() will swallow EOF), so only the
+	// first error is returned.
+	wg.Wait()
+	if len(errChan) > 0 {
+		return <-errChan
+	}
+
+	return nil
+}
+
+func ptInitializeLogging(enable bool) error {
+	if enable {
 		// While we could just exit, log an ENV-ERROR so it will propagate to
 		// the tor log.
-		f, err := os.OpenFile(path.Join(dir, obfs4LogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		f, err := os.OpenFile(path.Join(stateDir, obfs4proxyLogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
-			return ptEnvError(fmt.Sprintf("Failed to open log file: %s\n", err))
+			return ptEnvError(fmt.Sprintf("failed to open log file: %s\n", err))
 		}
 		log.SetOutput(f)
 	} else {
@@ -356,122 +353,74 @@ func ptInitializeLogging(enable bool) error {
 	return nil
 }
 
-func generateServerParams(id string) {
-	idIsFP := id != ""
-	var rawID []byte
-
-	if idIsFP {
-		var err error
-		rawID, err = hex.DecodeString(id)
-		if err != nil {
-			fmt.Println("Failed to hex decode id:", err)
-			return
-		}
-	} else {
-		rawID = make([]byte, ntor.NodeIDLength)
-		err := csrand.Bytes(rawID)
-		if err != nil {
-			fmt.Println("Failed to generate random node-id:", err)
-			return
-		}
-	}
-	parsedID, err := ntor.NewNodeID(rawID)
-	if err != nil {
-		fmt.Println("Failed to parse id:", err)
-		return
-	}
-
-	fmt.Println("Generated node-id:", parsedID.Base64())
-
-	keypair, err := ntor.NewKeypair(false)
-	if err != nil {
-		fmt.Println("Failed to generate keypair:", err)
-		return
-	}
-
-	seed := make([]byte, obfs4.SeedLength)
-	err = csrand.Bytes(seed)
-	if err != nil {
-		fmt.Println("Failed to generate DRBG seed:", err)
-		return
-	}
-	seedBase64 := base64.StdEncoding.EncodeToString(seed)
-
-	fmt.Println("Generated private-key:", keypair.Private().Base64())
-	fmt.Println("Generated public-key:", keypair.Public().Base64())
-	fmt.Println("Generated drbg-seed:", seedBase64)
-	fmt.Println()
-	fmt.Println("Client config: ")
-	if idIsFP {
-		fmt.Printf("  Bridge obfs4 <IP Address:Port> %s node-id=%s public-key=%s\n",
-			id, parsedID.Base64(), keypair.Public().Base64())
-	} else {
-		fmt.Printf("  Bridge obfs4 <IP Address:Port> <Fingerprint> node-id=%s public-key=%s\n",
-			parsedID.Base64(), keypair.Public().Base64())
-	}
-	fmt.Println()
-	fmt.Println("Server config:")
-	fmt.Printf("  ServerTransportOptions obfs4 node-id=%s private-key=%s drbg-seed=%s\n",
-		parsedID.Base64(), keypair.Private().Base64(), seedBase64)
-}
-
 func main() {
-	// Some command line args.
-	genParams := flag.Bool("genServerParams", false, "Generate Bridge operator torrc parameters")
-	genParamsFP := flag.String("genServerParamsFP", "", "Optional bridge fingerprint for genServerParams")
-	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/obfs4proxy.log")
-	flag.BoolVar(&iatObfuscation, "iatObfuscation", false, "Enable IAT obufscation (EXPENSIVE)")
+	// Handle the command line arguments.
+	_, execName := path.Split(os.Args[0])
+	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/"+obfs4proxyLogFile)
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
-	if *genParams {
-		generateServerParams(*genParamsFP)
-		return
-	}
 
-	// Go through the pt protocol and initialize client or server mode.
+	// Determine if this is a client or server, initialize logging, and finish
+	// the pt configuration.
+	var ptListeners []net.Listener
+	handlerChan = make(chan int)
 	launched := false
 	isClient, err := ptIsClient()
 	if err != nil {
-		log.Fatal("[ERROR] obfs4proxy must be run as a managed transport or server")
-	} else if isClient {
-		launched = clientSetup()
+		log.Fatalf("[ERROR]: %s - must be run as a managed transport", execName)
+	}
+	if stateDir, err = pt.MakeStateDir(); err != nil {
+		log.Fatalf("[ERROR]: %s - No state directory: %s", execName, err)
+	}
+	if err = ptInitializeLogging(enableLogging); err != nil {
+		log.Fatalf("[ERROR]: %s - failed to initialize logging", execName)
+	}
+	if isClient {
+		log.Printf("[INFO]: %s - initializing client transport listeners", execName)
+		launched, ptListeners = clientSetup()
 	} else {
-		launched = serverSetup()
+		log.Printf("[INFO]: %s - initializing server transport listeners", execName)
+		launched, ptListeners = serverSetup()
 	}
 	if !launched {
-		// Something must have failed in client/server setup, just bail.
+		// Initialization failed, the client or server setup routines should
+		// have logged, so just exit here.
 		os.Exit(-1)
 	}
 
-	log.Println("[INFO] obfs4proxy - Launched and listening")
+	log.Printf("[INFO]: %s - launched and accepting connections", execName)
 	defer func() {
-		log.Println("[INFO] obfs4proxy - Terminated")
+		log.Printf("[INFO]: %s - terminated", execName)
 	}()
 
-	// Handle termination notification.
-	numHandlers := 0
-	var sig os.Signal
+	// At this point, the pt config protocol is finished, and incoming
+	// connections will be processed.  Per the pt spec, on sane platforms
+	// termination is signaled via SIGINT (or SIGTERM), so wait on tor to
+	// request a shutdown of some sort.
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// wait for first signal
-	sig = nil
+	// Wait for the first SIGINT (close listeners).
+	var sig os.Signal
+	numHandlers := 0
 	for sig == nil {
 		select {
 		case n := <-handlerChan:
 			numHandlers += n
 		case sig = <-sigChan:
+			if sig == syscall.SIGTERM {
+				// SIGTERM causes immediate termination.
+				return
+			}
 		}
 	}
 	for _, ln := range ptListeners {
 		ln.Close()
 	}
 
-	if sig == syscall.SIGTERM {
-		return
-	}
-
-	// wait for second signal or no more handlers
+	// Wait for the 2nd SIGINT (or a SIGTERM), or for all current sessions to
+	// finish.
 	sig = nil
 	for sig == nil && numHandlers != 0 {
 		select {
@@ -481,5 +430,3 @@ func main() {
 		}
 	}
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

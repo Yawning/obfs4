@@ -37,7 +37,7 @@ import (
 
 	"github.com/dchest/siphash"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/csrand"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
 )
 
 // Size is the length of the HashDrbg output.
@@ -63,8 +63,7 @@ func (seed *Seed) Base64() string {
 // NewSeed returns a Seed initialized with the runtime CSPRNG.
 func NewSeed() (seed *Seed, err error) {
 	seed = new(Seed)
-	err = csrand.Bytes(seed.Bytes()[:])
-	if err != nil {
+	if err = csrand.Bytes(seed.Bytes()[:]); err != nil {
 		return nil, err
 	}
 
@@ -88,8 +87,7 @@ func SeedFromBytes(src []byte) (seed *Seed, err error) {
 // SeedLength as appropriate.
 func SeedFromBase64(encoded string) (seed *Seed, err error) {
 	var raw []byte
-	raw, err = base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
+	if raw, err = base64.StdEncoding.DecodeString(encoded); err != nil {
 		return nil, err
 	}
 
@@ -112,12 +110,18 @@ type HashDrbg struct {
 
 // NewHashDrbg makes a HashDrbg instance based off an optional seed.  The seed
 // is truncated to SeedLength.
-func NewHashDrbg(seed *Seed) *HashDrbg {
+func NewHashDrbg(seed *Seed) (*HashDrbg, error) {
 	drbg := new(HashDrbg)
+	if seed == nil {
+		var err error
+		if seed, err = NewSeed(); err != nil {
+			return nil, err
+		}
+	}
 	drbg.sip = siphash.New(seed.Bytes()[:16])
 	copy(drbg.ofb[:], seed.Bytes()[16:])
 
-	return drbg
+	return drbg, nil
 }
 
 // Int63 returns a uniformly distributed random integer [0, 1 << 63).
@@ -143,5 +147,3 @@ func (drbg *HashDrbg) NextBlock() []byte {
 	copy(ret, drbg.ofb[:])
 	return ret
 }
-
-/* vim :set ts=4 sw=4 sts=4 noet : */

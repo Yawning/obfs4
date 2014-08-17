@@ -1,12 +1,6 @@
 ## obfs4 - The obfourscator
 #### Yawning Angel (yawning at torproject dot org)
 
-### WARNING
-
-This is pre-alpha.  Don't expect any security or wire protocol stability yet.
-If you want to use something like this, you should currently probably be looking
-at ScrambleSuit.
-
 ### What?
 
 This is a look-like nothing obfuscation protocol that incorporates ideas and
@@ -21,6 +15,9 @@ The notable differences between ScrambleSuit and obfs4:
  * The handshake uses the Tor Project's ntor handshake with public keys
    obfuscated via the Elligator 2 mapping.
  * The link layer encryption uses NaCl secret boxes (Poly1305/XSalsa20).
+
+As an added bonus, obfs4proxy also supports acting as an obfs2/3 client and
+bridge to ease the transition to the new protocol.
 
 ### Why not extend ScrambleSuit?
 
@@ -42,20 +39,6 @@ listed for clarity.
  * ed25519/extra25519 (https://github.com/agl/ed25519/extra25519)
  * SipHash-2-4 (https://github.com/dchest/siphash)
  * goptlib (https://git.torproject.org/pluggable-transports/goptlib.git)
-
-### TODO
-
- * Code cleanups.
- * Write more unit tests.
- * Optimize further.
-
-### WON'T DO
-
- * I do not care that much about standalone mode.  Patches *MAY* be accepted,
-   especially if they are clean and are useful to Tor users.
- * Yes, I use a bunch of code from the borg^w^wGoogle.  If that bothers you
-   feel free to write your own implementation.
- * I do not care about older versions of the go runtime.
 
 ### Thanks
 
