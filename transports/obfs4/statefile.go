@@ -49,7 +49,7 @@ type jsonServerState struct {
 	NodeID     string `json:"node-id"`
 	PrivateKey string `json:"private-key"`
 	PublicKey  string `json:"public-key"`
-	DrbgSeed   string `json:"drbgSeed"`
+	DrbgSeed   string `json:"drbg-seed"`
 }
 
 type obfs4ServerState struct {
