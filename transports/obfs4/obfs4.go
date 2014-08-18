@@ -32,6 +32,7 @@ package obfs4
 import (
 	"bytes"
 	"crypto/sha256"
+	"flag"
 	"fmt"
 	"math/rand"
 	"net"
@@ -55,24 +56,26 @@ const (
 	privateKeyArg = "private-key"
 	seedArg       = "drbg-seed"
 
+	iatCmdArg  = "obfs4-iatObfuscation"
+	biasCmdArg = "obfs4-distBias"
+
 	seedLength             = 32
 	headerLength           = framing.FrameOverhead + packetOverhead
 	clientHandshakeTimeout = time.Duration(60) * time.Second
 	serverHandshakeTimeout = time.Duration(30) * time.Second
 	replayTTL              = time.Duration(3) * time.Hour
 
-	// Use a ScrambleSuit style biased probability table.
-	biasedDist = false
-
-	// Use IAT obfuscation.
-	iatObfuscation = false
-
-	// Maximum IAT delay (100 usec increments).
-	maxIATDelay = 100
-
+	maxIATDelay        = 100
 	maxCloseDelayBytes = maxHandshakeLength
 	maxCloseDelay      = 60
 )
+
+// iatObfuscation controls if Inter-Arrival Time obfuscation will be enabled.
+var iatObfuscation bool
+
+// biasedDist controls if the probability table will be ScrambleSuit style or
+// uniformly distributed.
+var biasedDist bool
 
 type obfs4ClientArgs struct {
 	nodeID     *ntor.NodeID
@@ -571,6 +574,11 @@ func (conn *obfs4Conn) padBurst(burst *bytes.Buffer) (err error) {
 	}
 
 	return
+}
+
+func init() {
+	flag.BoolVar(&iatObfuscation, iatCmdArg, false, "Enable obfs4 IAT obfuscation (expensive)")
+	flag.BoolVar(&biasedDist, biasCmdArg, false, "Enable obfs4 using ScrambleSuit style table generation")
 }
 
 var _ base.ClientFactory = (*obfs4ClientFactory)(nil)
