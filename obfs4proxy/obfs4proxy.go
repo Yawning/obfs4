@@ -234,6 +234,7 @@ func serverSetup() (launched bool, listeners []net.Listener) {
 		ln, err := net.ListenTCP("tcp", bindaddr.Addr)
 		if err != nil {
 			pt.SmethodError(name, err.Error())
+			continue
 		}
 
 		go serverAcceptLoop(f, ln, &ptServerInfo)
