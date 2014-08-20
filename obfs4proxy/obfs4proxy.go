@@ -167,7 +167,11 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 		// the configuration phase.
 		dialer, err := proxy.FromURL(proxyURI, proxy.Direct)
 		if err != nil {
-			log.Printf("[ERROR]: %s(%s) - failed to obtain proxy dialer: %s", name, addrStr, err)
+			if unsafeLogging {
+				log.Printf("[ERROR]: %s(%s) - failed to obtain proxy dialer: %s", name, addrStr, err)
+			} else {
+				log.Printf("[ERROR]: %s(%s) - failed to obtain proxy dialer", name, addrStr)
+			}
 			conn.Reject()
 			return
 		}
@@ -191,18 +195,26 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	// bytes back and forth.
 	remote, err := f.WrapConn(remoteConn, args)
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, err)
+		if unsafeLogging {
+			log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, err)
+		} else {
+			log.Printf("[ERROR]: %s(%s) - handshake failed", name, addrStr)
+		}
 		conn.Reject()
 		return
 	}
 	err = conn.Grant(remoteConn.RemoteAddr().(*net.TCPAddr))
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - SOCKS grant failed: %s", name, addrStr, err)
+		if unsafeLogging {
+			log.Printf("[ERROR]: %s(%s) - SOCKS grant failed: %s", name, addrStr, err)
+		} else {
+			log.Printf("[ERROR]: %s(%s) - SOCKS grant failed", name, addrStr)
+		}
 		return
 	}
 
 	err = copyLoop(conn, remote)
-	if err != nil {
+	if err != nil && unsafeLogging {
 		log.Printf("[INFO]: %s(%s) - closed connection: %s", name, addrStr, err)
 	} else {
 		log.Printf("[INFO]: %s(%s) - closed connection", name, addrStr)
@@ -282,20 +294,28 @@ func serverHandler(f base.ServerFactory, conn net.Conn, info *pt.ServerInfo) {
 	// Instantiate the server transport method and handshake.
 	remote, err := f.WrapConn(conn)
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, err)
+		if unsafeLogging {
+			log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, err)
+		} else {
+			log.Printf("[ERROR]: %s(%s) - handshake failed", name, addrStr)
+		}
 		return
 	}
 
 	// Connect to the orport.
 	orConn, err := pt.DialOr(info, conn.RemoteAddr().String(), name)
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - failed to connect to ORPort: %s", name, addrStr, err)
+		if unsafeLogging {
+			log.Printf("[ERROR]: %s(%s) - failed to connect to ORPort: %s", name, addrStr, err)
+		} else {
+			log.Printf("[ERROR]: %s(%s) - failed to connect to ORPort", name, addrStr)
+		}
 		return
 	}
 	defer orConn.Close()
 
 	err = copyLoop(orConn, remote)
-	if err != nil {
+	if err != nil && unsafeLogging {
 		log.Printf("[INFO]: %s(%s) - closed connection: %s", name, addrStr, err)
 	} else {
 		log.Printf("[INFO]: %s(%s) - closed connection", name, addrStr)
