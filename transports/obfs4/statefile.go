@@ -28,7 +28,6 @@
 package obfs4
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -85,17 +84,13 @@ func serverStateFromJSONServerState(js *jsonServerState) (*obfs4ServerState, err
 	var err error
 
 	st := new(obfs4ServerState)
-	if st.nodeID, err = ntor.NodeIDFromBase64(js.NodeID); err != nil {
+	if st.nodeID, err = ntor.NodeIDFromHex(js.NodeID); err != nil {
 		return nil, err
 	}
-	if st.identityKey, err = ntor.KeypairFromBase64(js.PrivateKey); err != nil {
+	if st.identityKey, err = ntor.KeypairFromHex(js.PrivateKey); err != nil {
 		return nil, err
 	}
-	var rawSeed []byte
-	if rawSeed, err = base64.StdEncoding.DecodeString(js.DrbgSeed); err != nil {
-		return nil, err
-	}
-	if st.drbgSeed, err = drbg.SeedFromBytes(rawSeed); err != nil {
+	if st.drbgSeed, err = drbg.SeedFromHex(js.DrbgSeed); err != nil {
 		return nil, err
 	}
 
@@ -138,10 +133,10 @@ func newJSONServerState(stateDir string, js *jsonServerState) (err error) {
 	}
 
 	// Encode it into JSON format and write the state file.
-	js.NodeID = st.nodeID.Base64()
-	js.PrivateKey = st.identityKey.Private().Base64()
-	js.PublicKey = st.identityKey.Public().Base64()
-	js.DrbgSeed = st.drbgSeed.Base64()
+	js.NodeID = st.nodeID.Hex()
+	js.PrivateKey = st.identityKey.Private().Hex()
+	js.PublicKey = st.identityKey.Public().Hex()
+	js.DrbgSeed = st.drbgSeed.Hex()
 
 	var encoded []byte
 	if encoded, err = json.Marshal(js); err != nil {

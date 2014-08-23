@@ -117,8 +117,8 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 
 	// Store the arguments that should appear in our descriptor for the clients.
 	ptArgs := pt.Args{}
-	ptArgs.Add(nodeIDArg, st.nodeID.Base64())
-	ptArgs.Add(publicKeyArg, st.identityKey.Public().Base64())
+	ptArgs.Add(nodeIDArg, st.nodeID.Hex())
+	ptArgs.Add(publicKeyArg, st.identityKey.Public().Hex())
 
 	// Initialize the replay filter.
 	filter, err := replayfilter.New(replayTTL)
@@ -154,7 +154,7 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 		return nil, fmt.Errorf("missing argument '%s'", nodeIDArg)
 	}
 	var nodeID *ntor.NodeID
-	if nodeID, err = ntor.NodeIDFromBase64(nodeIDStr); err != nil {
+	if nodeID, err = ntor.NodeIDFromHex(nodeIDStr); err != nil {
 		return nil, err
 	}
 
@@ -163,7 +163,7 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 		return nil, fmt.Errorf("missing argument '%s'", publicKeyArg)
 	}
 	var publicKey *ntor.PublicKey
-	if publicKey, err = ntor.PublicKeyFromBase64(publicKeyStr); err != nil {
+	if publicKey, err = ntor.PublicKeyFromHex(publicKeyStr); err != nil {
 		return nil, err
 	}
 

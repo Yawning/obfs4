@@ -30,7 +30,7 @@
 package drbg
 
 import (
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -55,9 +55,9 @@ func (seed *Seed) Bytes() *[SeedLength]byte {
 	return (*[SeedLength]byte)(seed)
 }
 
-// Base64 returns the Base64 representation of the seed.
-func (seed *Seed) Base64() string {
-	return base64.StdEncoding.EncodeToString(seed.Bytes()[:])
+// Hex returns the hexdecimal representation of the seed.
+func (seed *Seed) Hex() string {
+	return hex.EncodeToString(seed.Bytes()[:])
 }
 
 // NewSeed returns a Seed initialized with the runtime CSPRNG.
@@ -83,11 +83,11 @@ func SeedFromBytes(src []byte) (seed *Seed, err error) {
 	return
 }
 
-// SeedFromBase64 creates a Seed from the Base64 representation, truncating to
+// SeedFromHex creates a Seed from the hexdecimal representation, truncating to
 // SeedLength as appropriate.
-func SeedFromBase64(encoded string) (seed *Seed, err error) {
+func SeedFromHex(encoded string) (seed *Seed, err error) {
 	var raw []byte
-	if raw, err = base64.StdEncoding.DecodeString(encoded); err != nil {
+	if raw, err = hex.DecodeString(encoded); err != nil {
 		return nil, err
 	}
 

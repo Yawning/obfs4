@@ -39,7 +39,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 
@@ -137,9 +137,9 @@ func NewNodeID(raw []byte) (*NodeID, error) {
 	return nodeID, nil
 }
 
-// NodeIDFromBase64 creates a new NodeID from the Base64 encoded representation.
-func NodeIDFromBase64(encoded string) (*NodeID, error) {
-	raw, err := base64.StdEncoding.DecodeString(encoded)
+// NodeIDFromHex creates a new NodeID from the hexdecimal representation.
+func NodeIDFromHex(encoded string) (*NodeID, error) {
+	raw, err := hex.DecodeString(encoded)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +151,9 @@ func (id *NodeID) Bytes() *[NodeIDLength]byte {
 	return (*[NodeIDLength]byte)(id)
 }
 
-// Base64 returns the Base64 representation of the NodeID.
-func (id *NodeID) Base64() string {
-	return base64.StdEncoding.EncodeToString(id[:])
+// Hex returns the hexdecimal representation of the NodeID.
+func (id *NodeID) Hex() string {
+	return hex.EncodeToString(id[:])
 }
 
 // PublicKey is a Curve25519 public key in little-endian byte order.
@@ -164,9 +164,9 @@ func (public *PublicKey) Bytes() *[PublicKeyLength]byte {
 	return (*[PublicKeyLength]byte)(public)
 }
 
-// Base64 returns the Base64 representation of the Curve25519 public key.
-func (public *PublicKey) Base64() string {
-	return base64.StdEncoding.EncodeToString(public.Bytes()[:])
+// Hex returns the hexdecimal representation of the Curve25519 public key.
+func (public *PublicKey) Hex() string {
+	return hex.EncodeToString(public.Bytes()[:])
 }
 
 // NewPublicKey creates a PublicKey from the raw bytes.
@@ -181,9 +181,9 @@ func NewPublicKey(raw []byte) (*PublicKey, error) {
 	return pubKey, nil
 }
 
-// PublicKeyFromBase64 returns a PublicKey from a Base64 representation.
-func PublicKeyFromBase64(encoded string) (*PublicKey, error) {
-	raw, err := base64.StdEncoding.DecodeString(encoded)
+// PublicKeyFromHex returns a PublicKey from the hexdecimal representation.
+func PublicKeyFromHex(encoded string) (*PublicKey, error) {
+	raw, err := hex.DecodeString(encoded)
 	if err != nil {
 		return nil, err
 	}
@@ -216,9 +216,9 @@ func (private *PrivateKey) Bytes() *[PrivateKeyLength]byte {
 	return (*[PrivateKeyLength]byte)(private)
 }
 
-// Base64 returns the Base64 representation of the Curve25519 private key.
-func (private *PrivateKey) Base64() string {
-	return base64.StdEncoding.EncodeToString(private.Bytes()[:])
+// Hex returns the hexdecimal representation of the Curve25519 private key.
+func (private *PrivateKey) Hex() string {
+	return hex.EncodeToString(private.Bytes()[:])
 }
 
 // Keypair is a Curve25519 keypair with an optional Elligator representative.
@@ -291,10 +291,10 @@ func NewKeypair(elligator bool) (*Keypair, error) {
 	}
 }
 
-// KeypairFromBase64 returns a Keypair from a Base64 representation of the
+// KeypairFromHex returns a Keypair from the hexdecimal representation of the
 // private key.
-func KeypairFromBase64(encoded string) (*Keypair, error) {
-	raw, err := base64.StdEncoding.DecodeString(encoded)
+func KeypairFromHex(encoded string) (*Keypair, error) {
+	raw, err := hex.DecodeString(encoded)
 	if err != nil {
 		return nil, err
 	}
