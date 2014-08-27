@@ -33,6 +33,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
@@ -49,12 +50,14 @@ type jsonServerState struct {
 	PrivateKey string `json:"private-key"`
 	PublicKey  string `json:"public-key"`
 	DrbgSeed   string `json:"drbg-seed"`
+	IATMode    int    `json:"iat-mode"`
 }
 
 type obfs4ServerState struct {
 	nodeID      *ntor.NodeID
 	identityKey *ntor.Keypair
 	drbgSeed    *drbg.Seed
+	iatMode     int
 }
 
 func serverStateFromArgs(stateDir string, args *pt.Args) (*obfs4ServerState, error) {
@@ -64,8 +67,9 @@ func serverStateFromArgs(stateDir string, args *pt.Args) (*obfs4ServerState, err
 	js.NodeID, nodeIDOk = args.Get(nodeIDArg)
 	js.PrivateKey, privKeyOk = args.Get(privateKeyArg)
 	js.DrbgSeed, seedOk = args.Get(seedArg)
+	iatStr, iatOk := args.Get(iatArg)
 
-	if !privKeyOk && !nodeIDOk && !seedOk {
+	if !privKeyOk && !nodeIDOk && !seedOk && !iatOk {
 		if err := jsonServerStateFromFile(stateDir, &js); err != nil {
 			return nil, err
 		}
@@ -75,6 +79,16 @@ func serverStateFromArgs(stateDir string, args *pt.Args) (*obfs4ServerState, err
 		return nil, fmt.Errorf("missing argument '%s'", nodeIDArg)
 	} else if !seedOk {
 		return nil, fmt.Errorf("missing argument '%s'", seedArg)
+	} else if !iatOk {
+		// Disable IAT if not specified.
+		return nil, fmt.Errorf("missing argument '%s'", iatArg)
+	} else {
+		// Parse and validate the iat-mode argument.
+		iatMode, err := strconv.Atoi(iatStr)
+		if err != nil {
+			return nil, fmt.Errorf("malformed iat-mode '%s'", iatStr)
+		}
+		js.IATMode = iatMode
 	}
 
 	return serverStateFromJSONServerState(&js)
@@ -93,6 +107,10 @@ func serverStateFromJSONServerState(js *jsonServerState) (*obfs4ServerState, err
 	if st.drbgSeed, err = drbg.SeedFromHex(js.DrbgSeed); err != nil {
 		return nil, err
 	}
+	if js.IATMode < iatNone || js.IATMode > iatParanoid {
+		return nil, fmt.Errorf("invalid iat-mode '%d'", js.IATMode)
+	}
+	st.iatMode = js.IATMode
 
 	return st, nil
 }
@@ -132,12 +150,14 @@ func newJSONServerState(stateDir string, js *jsonServerState) (err error) {
 	if st.drbgSeed, err = drbg.NewSeed(); err != nil {
 		return
 	}
+	st.iatMode = iatNone
 
 	// Encode it into JSON format and write the state file.
 	js.NodeID = st.nodeID.Hex()
 	js.PrivateKey = st.identityKey.Private().Hex()
 	js.PublicKey = st.identityKey.Public().Hex()
 	js.DrbgSeed = st.drbgSeed.Hex()
+	js.IATMode = st.iatMode
 
 	var encoded []byte
 	if encoded, err = json.Marshal(js); err != nil {

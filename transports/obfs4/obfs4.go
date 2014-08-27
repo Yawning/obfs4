@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -55,11 +56,11 @@ const (
 	publicKeyArg  = "public-key"
 	privateKeyArg = "private-key"
 	seedArg       = "drbg-seed"
+	iatArg        = "iat-mode"
 
-	iatCmdArg  = "obfs4-iatObfuscation"
 	biasCmdArg = "obfs4-distBias"
 
-	seedLength             = 32
+	seedLength             = drbg.SeedLength
 	headerLength           = framing.FrameOverhead + packetOverhead
 	clientHandshakeTimeout = time.Duration(60) * time.Second
 	serverHandshakeTimeout = time.Duration(30) * time.Second
@@ -70,8 +71,11 @@ const (
 	maxCloseDelay      = 60
 )
 
-// iatObfuscation controls if Inter-Arrival Time obfuscation will be enabled.
-var iatObfuscation bool
+const (
+	iatNone = iota
+	iatEnabled
+	iatParanoid
+)
 
 // biasedDist controls if the probability table will be ScrambleSuit style or
 // uniformly distributed.
@@ -81,6 +85,7 @@ type obfs4ClientArgs struct {
 	nodeID     *ntor.NodeID
 	publicKey  *ntor.PublicKey
 	sessionKey *ntor.Keypair
+	iatMode    int
 }
 
 // Transport is the obfs4 implementation of the base.Transport interface.
@@ -107,7 +112,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 	}
 
 	var iatSeed *drbg.Seed
-	if iatObfuscation {
+	if st.iatMode != iatNone {
 		iatSeedSrc := sha256.Sum256(st.drbgSeed.Bytes()[:])
 		iatSeed, err = drbg.SeedFromBytes(iatSeedSrc[:])
 		if err != nil {
@@ -119,6 +124,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 	ptArgs := pt.Args{}
 	ptArgs.Add(nodeIDArg, st.nodeID.Hex())
 	ptArgs.Add(publicKeyArg, st.identityKey.Public().Hex())
+	ptArgs.Add(iatArg, strconv.Itoa(st.iatMode))
 
 	// Initialize the replay filter.
 	filter, err := replayfilter.New(replayTTL)
@@ -133,7 +139,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 	}
 	rng := rand.New(drbg)
 
-	sf := &obfs4ServerFactory{t, &ptArgs, st.nodeID, st.identityKey, st.drbgSeed, iatSeed, filter, rng.Intn(maxCloseDelayBytes), rng.Intn(maxCloseDelay)}
+	sf := &obfs4ServerFactory{t, &ptArgs, st.nodeID, st.identityKey, st.drbgSeed, iatSeed, st.iatMode, filter, rng.Intn(maxCloseDelayBytes), rng.Intn(maxCloseDelay)}
 	return sf, nil
 }
 
@@ -157,6 +163,15 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 	if nodeID, err = ntor.NodeIDFromHex(nodeIDStr); err != nil {
 		return nil, err
 	}
+	iatStr, ok := args.Get(iatArg)
+	if !ok {
+		return nil, fmt.Errorf("missing argument '%s'", iatArg)
+	}
+	var iatMode int
+	iatMode, err = strconv.Atoi(iatStr)
+	if err != nil || iatMode < iatNone || iatMode > iatParanoid {
+		return nil, fmt.Errorf("invalid iat-mode '%d'", iatMode)
+	}
 
 	publicKeyStr, ok := args.Get(publicKeyArg)
 	if !ok {
@@ -174,7 +189,7 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 		return nil, err
 	}
 
-	return &obfs4ClientArgs{nodeID, publicKey, sessionKey}, nil
+	return &obfs4ClientArgs{nodeID, publicKey, sessionKey, iatMode}, nil
 }
 
 func (cf *obfs4ClientFactory) WrapConn(conn net.Conn, args interface{}) (net.Conn, error) {
@@ -194,6 +209,7 @@ type obfs4ServerFactory struct {
 	identityKey  *ntor.Keypair
 	lenSeed      *drbg.Seed
 	iatSeed      *drbg.Seed
+	iatMode      int
 	replayFilter *replayfilter.ReplayFilter
 
 	closeDelayBytes int
@@ -228,7 +244,7 @@ func (sf *obfs4ServerFactory) WrapConn(conn net.Conn) (net.Conn, error) {
 		iatDist = probdist.New(sf.iatSeed, 0, maxIATDelay, biasedDist)
 	}
 
-	c := &obfs4Conn{conn, true, lenDist, iatDist, bytes.NewBuffer(nil), bytes.NewBuffer(nil), nil, nil}
+	c := &obfs4Conn{conn, true, lenDist, iatDist, sf.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), nil, nil}
 
 	startTime := time.Now()
 
@@ -247,6 +263,7 @@ type obfs4Conn struct {
 
 	lenDist *probdist.WeightedDist
 	iatDist *probdist.WeightedDist
+	iatMode int
 
 	receiveBuffer        *bytes.Buffer
 	receiveDecodedBuffer *bytes.Buffer
@@ -263,7 +280,7 @@ func newObfs4ClientConn(conn net.Conn, args *obfs4ClientArgs) (c *obfs4Conn, err
 	}
 	lenDist := probdist.New(seed, 0, framing.MaximumSegmentLength, biasedDist)
 	var iatDist *probdist.WeightedDist
-	if iatObfuscation {
+	if args.iatMode != iatNone {
 		var iatSeed *drbg.Seed
 		iatSeedSrc := sha256.Sum256(seed.Bytes()[:])
 		if iatSeed, err = drbg.SeedFromBytes(iatSeedSrc[:]); err != nil {
@@ -273,7 +290,7 @@ func newObfs4ClientConn(conn net.Conn, args *obfs4ClientArgs) (c *obfs4Conn, err
 	}
 
 	// Allocate the client structure.
-	c = &obfs4Conn{conn, false, lenDist, iatDist, bytes.NewBuffer(nil), bytes.NewBuffer(nil), nil, nil}
+	c = &obfs4Conn{conn, false, lenDist, iatDist, args.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), nil, nil}
 
 	// Start the handshake timeout.
 	deadline := time.Now().Add(clientHandshakeTimeout)
@@ -466,24 +483,51 @@ func (conn *obfs4Conn) Write(b []byte) (n int, err error) {
 		}
 	}
 
-	// Add the length obfuscation padding.  In theory, this could be inlined
-	// with the last chopped packet for certain (most?) payload lenghts, but
-	// this is simpler.
-
-	if err = conn.padBurst(&frameBuf); err != nil {
-		return 0, err
+	if conn.iatMode != iatParanoid {
+		// For non-paranoid IAT, pad once per burst.  Paranoid IAT handles
+		// things differently.
+		if err = conn.padBurst(&frameBuf, conn.lenDist.Sample()); err != nil {
+			return 0, err
+		}
 	}
 
 	// Write the pending data onto the network.  Partial writes are fatal,
 	// because the frame encoder state is advanced, and the code doesn't keep
 	// frameBuf around.  In theory, write timeouts and whatnot could be
 	// supported if this wasn't the case, but that complicates the code.
-
-	if conn.iatDist != nil {
+	if conn.iatMode != iatNone {
 		var iatFrame [framing.MaximumSegmentLength]byte
 		for frameBuf.Len() > 0 {
 			iatWrLen := 0
-			iatWrLen, err = frameBuf.Read(iatFrame[:])
+
+			switch conn.iatMode {
+			case iatEnabled:
+				// Standard (ScrambleSuit-style) IAT obfuscation optimizes for
+				// bulk transport and will write ~MTU sized frames when
+				// possible.
+				iatWrLen, err = frameBuf.Read(iatFrame[:])
+
+			case iatParanoid:
+				// Paranoid IAT obfuscation throws performance out of the
+				// window and will sample the length distribution every time a
+				// write is scheduled.
+				targetLen := conn.lenDist.Sample()
+				if frameBuf.Len() < targetLen {
+					// There's not enough data buffered for the target write,
+					// so padding must be inserted.
+					if err = conn.padBurst(&frameBuf, targetLen); err != nil {
+						return 0, err
+					}
+					if frameBuf.Len() != targetLen {
+						// Ugh, padding came out to a value that required more
+						// than one frame, this is relatively unlikely so just
+						// resample since there's enough data to ensure that
+						// the next sample will be written.
+						continue
+					}
+				}
+				iatWrLen, err = frameBuf.Read(iatFrame[:targetLen])
+			}
 			if err != nil {
 				return 0, err
 			} else if iatWrLen == 0 {
@@ -543,9 +587,8 @@ func (conn *obfs4Conn) closeAfterDelay(sf *obfs4ServerFactory, startTime time.Ti
 	}
 }
 
-func (conn *obfs4Conn) padBurst(burst *bytes.Buffer) (err error) {
+func (conn *obfs4Conn) padBurst(burst *bytes.Buffer, toPadTo int) (err error) {
 	tailLen := burst.Len() % framing.MaximumSegmentLength
-	toPadTo := conn.lenDist.Sample()
 
 	padLen := 0
 	if toPadTo >= tailLen {
@@ -577,7 +620,6 @@ func (conn *obfs4Conn) padBurst(burst *bytes.Buffer) (err error) {
 }
 
 func init() {
-	flag.BoolVar(&iatObfuscation, iatCmdArg, false, "Enable obfs4 IAT obfuscation (expensive)")
 	flag.BoolVar(&biasedDist, biasCmdArg, false, "Enable obfs4 using ScrambleSuit style table generation")
 }
 
