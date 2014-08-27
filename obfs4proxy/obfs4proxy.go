@@ -51,6 +51,7 @@ import (
 )
 
 const (
+	obfs4proxyVersion = "0.0.1"
 	obfs4proxyLogFile = "obfs4proxy.log"
 	socksAddr         = "127.0.0.1:0"
 	elidedAddr        = "[scrubbed]"
@@ -374,12 +375,22 @@ func ptInitializeLogging(enable bool) error {
 	return nil
 }
 
+func version() {
+	fmt.Printf("obfs4proxy-%s\n", obfs4proxyVersion)
+	os.Exit(0)
+}
+
 func main() {
 	// Handle the command line arguments.
 	_, execName := path.Split(os.Args[0])
+	showVer := flag.Bool("v", false, "Print version and exit")
 	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/"+obfs4proxyLogFile)
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
+
+	if *showVer {
+		version()
+	}
 
 	// Determine if this is a client or server, initialize logging, and finish
 	// the pt configuration.
