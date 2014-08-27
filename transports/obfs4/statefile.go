@@ -98,7 +98,8 @@ func serverStateFromJSONServerState(js *jsonServerState) (*obfs4ServerState, err
 }
 
 func jsonServerStateFromFile(stateDir string, js *jsonServerState) error {
-	f, err := ioutil.ReadFile(path.Join(stateDir, stateFile))
+	fPath := path.Join(stateDir, stateFile)
+	f, err := ioutil.ReadFile(fPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			if err = newJSONServerState(stateDir, js); err == nil {
@@ -109,7 +110,7 @@ func jsonServerStateFromFile(stateDir string, js *jsonServerState) error {
 	}
 
 	if err = json.Unmarshal(f, js); err != nil {
-		return err
+		return fmt.Errorf("failed to load statefile '%s': %s", fPath, err)
 	}
 
 	return nil
