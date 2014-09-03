@@ -41,6 +41,13 @@ const (
 
 var logLevel = levelInfo
 
+func noticef(format string, a ...interface{}) {
+	if enableLogging {
+		msg := fmt.Sprintf(format, a...)
+		log.Print("[NOTICE]: " + msg)
+	}
+}
+
 func errorf(format string, a ...interface{}) {
 	if enableLogging && logLevel >= levelError {
 		msg := fmt.Sprintf(format, a...)

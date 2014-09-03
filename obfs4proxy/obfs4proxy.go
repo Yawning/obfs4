@@ -383,9 +383,8 @@ func ptInitializeLogging(enable bool) error {
 	return nil
 }
 
-func version() {
-	fmt.Printf("obfs4proxy-%s\n", obfs4proxyVersion)
-	os.Exit(0)
+func getVersion() string {
+	return fmt.Sprintf("obfs4proxy-%s", obfs4proxyVersion)
 }
 
 func main() {
@@ -398,7 +397,8 @@ func main() {
 	flag.Parse()
 
 	if *showVer {
-		version()
+		fmt.Printf("%s\n", getVersion())
+		os.Exit(0)
 	}
 	if err := setLogLevel(*logLevelStr); err != nil {
 		log.Fatalf("[ERROR]: failed to set log level: %s", err)
@@ -418,6 +418,8 @@ func main() {
 	}
 	if err = ptInitializeLogging(enableLogging); err != nil {
 		log.Fatalf("[ERROR]: %s - failed to initialize logging", execName)
+	} else {
+		noticef("%s - launched", getVersion())
 	}
 	if isClient {
 		infof("%s - initializing client transport listeners", execName)
@@ -432,9 +434,9 @@ func main() {
 		os.Exit(-1)
 	}
 
-	infof("%s - launched and accepting connections", execName)
+	infof("%s - accepting connections", execName)
 	defer func() {
-		infof("%s - terminated", execName)
+		noticef("%s - terminated", execName)
 	}()
 
 	// At this point, the pt config protocol is finished, and incoming
