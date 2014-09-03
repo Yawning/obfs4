@@ -150,7 +150,7 @@ func clientSetup() (launched bool, listeners []net.Listener) {
 		go clientAcceptLoop(f, ln, ptClientProxy)
 		pt.Cmethod(name, ln.Version(), ln.Addr())
 
-		log.Printf("[INFO]: %s - registered listener: %s", name, ln.Addr())
+		infof("%s - registered listener: %s", name, ln.Addr())
 
 		listeners = append(listeners, ln)
 		launched = true
@@ -183,12 +183,12 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 
 	name := f.Transport().Name()
 	addrStr := elideAddr(conn.Req.Target)
-	log.Printf("[INFO]: %s(%s) - new connection", name, addrStr)
+	infof("%s(%s) - new connection", name, addrStr)
 
 	// Deal with arguments.
 	args, err := f.ParseArgs(&conn.Req.Args)
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - invalid arguments: %s", name, addrStr, err)
+		warnf("%s(%s) - invalid arguments: %s", name, addrStr, err)
 		conn.Reject()
 		return
 	}
@@ -202,7 +202,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 		// the configuration phase.
 		dialer, err := proxy.FromURL(proxyURI, proxy.Direct)
 		if err != nil {
-			log.Printf("[ERROR]: %s(%s) - failed to obtain proxy dialer: %s", name, addrStr, elideError(err))
+			errorf("%s(%s) - failed to obtain proxy dialer: %s", name, addrStr, elideError(err))
 			conn.Reject()
 			return
 		}
@@ -210,7 +210,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	}
 	remoteConn, err := dialFn("tcp", conn.Req.Target) // XXX: Allow UDP?
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - outgoing connection failed: %s", name, addrStr, elideError(err))
+		warnf("%s(%s) - outgoing connection failed: %s", name, addrStr, elideError(err))
 		conn.Reject()
 		return
 	}
@@ -220,21 +220,21 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	// bytes back and forth.
 	remote, err := f.WrapConn(remoteConn, args)
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, elideError(err))
+		warnf("%s(%s) - handshake failed: %s", name, addrStr, elideError(err))
 		conn.Reject()
 		return
 	}
 	err = conn.Grant(remoteConn.RemoteAddr().(*net.TCPAddr))
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - SOCKS grant failed: %s", name, addrStr, elideError(err))
+		warnf("%s(%s) - SOCKS grant failed: %s", name, addrStr, elideError(err))
 		return
 	}
 
 	err = copyLoop(conn, remote)
 	if err != nil {
-		log.Printf("[INFO]: %s(%s) - closed connection: %s", name, addrStr, elideError(err))
+		warnf("%s(%s) - closed connection: %s", name, addrStr, elideError(err))
 	} else {
-		log.Printf("[INFO]: %s(%s) - closed connection", name, addrStr)
+		infof("%s(%s) - closed connection", name, addrStr)
 	}
 
 	return
@@ -273,7 +273,7 @@ func serverSetup() (launched bool, listeners []net.Listener) {
 			pt.SmethodArgs(name, ln.Addr(), nil)
 		}
 
-		log.Printf("[INFO]: %s - registered listener: %s", name, elideAddr(ln.Addr().String()))
+		infof("%s - registered listener: %s", name, elideAddr(ln.Addr().String()))
 
 		listeners = append(listeners, ln)
 		launched = true
@@ -306,28 +306,28 @@ func serverHandler(f base.ServerFactory, conn net.Conn, info *pt.ServerInfo) {
 
 	name := f.Transport().Name()
 	addrStr := elideAddr(conn.RemoteAddr().String())
-	log.Printf("[INFO]: %s(%s) - new connection", name, addrStr)
+	infof("%s(%s) - new connection", name, addrStr)
 
 	// Instantiate the server transport method and handshake.
 	remote, err := f.WrapConn(conn)
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - handshake failed: %s", name, addrStr, elideError(err))
+		warnf("%s(%s) - handshake failed: %s", name, addrStr, elideError(err))
 		return
 	}
 
 	// Connect to the orport.
 	orConn, err := pt.DialOr(info, conn.RemoteAddr().String(), name)
 	if err != nil {
-		log.Printf("[ERROR]: %s(%s) - failed to connect to ORPort: %s", name, addrStr, elideError(err))
+		errorf("%s(%s) - failed to connect to ORPort: %s", name, addrStr, elideError(err))
 		return
 	}
 	defer orConn.Close()
 
 	err = copyLoop(orConn, remote)
 	if err != nil {
-		log.Printf("[INFO]: %s(%s) - closed connection: %s", name, addrStr, elideError(err))
+		warnf("%s(%s) - closed connection: %s", name, addrStr, elideError(err))
 	} else {
-		log.Printf("[INFO]: %s(%s) - closed connection", name, addrStr)
+		infof("%s(%s) - closed connection", name, addrStr)
 	}
 
 	return
@@ -392,12 +392,16 @@ func main() {
 	// Handle the command line arguments.
 	_, execName := path.Split(os.Args[0])
 	showVer := flag.Bool("v", false, "Print version and exit")
+	logLevelStr := flag.String("logLevel", "WARN", "Log level (ERROR/WARN/INFO)")
 	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/"+obfs4proxyLogFile)
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
 
 	if *showVer {
 		version()
+	}
+	if err := setLogLevel(*logLevelStr); err != nil {
+		log.Fatalf("[ERROR]: failed to set log level: %s", err)
 	}
 
 	// Determine if this is a client or server, initialize logging, and finish
@@ -416,10 +420,10 @@ func main() {
 		log.Fatalf("[ERROR]: %s - failed to initialize logging", execName)
 	}
 	if isClient {
-		log.Printf("[INFO]: %s - initializing client transport listeners", execName)
+		infof("%s - initializing client transport listeners", execName)
 		launched, ptListeners = clientSetup()
 	} else {
-		log.Printf("[INFO]: %s - initializing server transport listeners", execName)
+		infof("%s - initializing server transport listeners", execName)
 		launched, ptListeners = serverSetup()
 	}
 	if !launched {
@@ -428,9 +432,9 @@ func main() {
 		os.Exit(-1)
 	}
 
-	log.Printf("[INFO]: %s - launched and accepting connections", execName)
+	infof("%s - launched and accepting connections", execName)
 	defer func() {
-		log.Printf("[INFO]: %s - terminated", execName)
+		infof("%s - terminated", execName)
 	}()
 
 	// At this point, the pt config protocol is finished, and incoming
