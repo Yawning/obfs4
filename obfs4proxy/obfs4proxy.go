@@ -188,7 +188,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	// Deal with arguments.
 	args, err := f.ParseArgs(&conn.Req.Args)
 	if err != nil {
-		warnf("%s(%s) - invalid arguments: %s", name, addrStr, err)
+		errorf("%s(%s) - invalid arguments: %s", name, addrStr, err)
 		conn.Reject()
 		return
 	}
@@ -210,7 +210,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	}
 	remoteConn, err := dialFn("tcp", conn.Req.Target) // XXX: Allow UDP?
 	if err != nil {
-		warnf("%s(%s) - outgoing connection failed: %s", name, addrStr, elideError(err))
+		errorf("%s(%s) - outgoing connection failed: %s", name, addrStr, elideError(err))
 		conn.Reject()
 		return
 	}
@@ -220,13 +220,13 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	// bytes back and forth.
 	remote, err := f.WrapConn(remoteConn, args)
 	if err != nil {
-		warnf("%s(%s) - handshake failed: %s", name, addrStr, elideError(err))
+		errorf("%s(%s) - handshake failed: %s", name, addrStr, elideError(err))
 		conn.Reject()
 		return
 	}
 	err = conn.Grant(remoteConn.RemoteAddr().(*net.TCPAddr))
 	if err != nil {
-		warnf("%s(%s) - SOCKS grant failed: %s", name, addrStr, elideError(err))
+		errorf("%s(%s) - SOCKS grant failed: %s", name, addrStr, elideError(err))
 		return
 	}
 
@@ -391,7 +391,7 @@ func main() {
 	// Handle the command line arguments.
 	_, execName := path.Split(os.Args[0])
 	showVer := flag.Bool("version", false, "Print version and exit")
-	logLevelStr := flag.String("logLevel", "WARN", "Log level (ERROR/WARN/INFO)")
+	logLevelStr := flag.String("logLevel", "ERROR", "Log level (ERROR/WARN/INFO)")
 	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/"+obfs4proxyLogFile)
 	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
