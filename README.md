@@ -32,8 +32,8 @@ handshake variants without being obscenely slow is non-trivial.
 Build time library dependencies are handled by go get automatically but are
 listed for clarity.
 
- * Go 1.2.0 or later.   Prior versions of Go 1.0.2 are missing certain important
-   parts of the runtime library like a SHA256 implementation.
+ * Go 1.2.0 or later.   Prior versions of Go (Eg: 1.0.2) are missing certain
+   important parts of the runtime library like a SHA256 implementation.
  * go.crypto (https://code.google.com/p/go.crypto)
  * go.net (https://code.google.com/p/go.net)
  * ed25519/extra25519 (https://github.com/agl/ed25519/extra25519)
@@ -46,11 +46,11 @@ To build:
 `go get git.torproject.org/pluggable-transports/obfs4.git/obfs4proxy`
 
 To install:
-Copy `$GOPATH/bin/obfs4proxy` to a permanent location (Eg: `/usr/local/sbin`)
+Copy `$GOPATH/bin/obfs4proxy` to a permanent location (Eg: `/usr/local/bin`)
 
 Client side torrc configuration:
 ```
-ClientTransportPlugin obfs4 exec /usr/local/sbin/obfs4proxy
+ClientTransportPlugin obfs4 exec /usr/local/bin/obfs4proxy
 ```
 
 Bridge side torrc configuration:
@@ -58,8 +58,11 @@ Bridge side torrc configuration:
 # Act as a bridge relay.
 BridgeRelay 1
 
+# Enable the Extended ORPort
+ExtORPort auto
+
 # Use obfs4proxy to provide the obfs4 protocol.
-ServerTransportPlugin obfs4 exec /usr/local/sbin/obfs4proxy
+ServerTransportPlugin obfs4 exec /usr/local/bin/obfs4proxy
 
 # (Optional) Listen on the specified address/port for obfs4 connections as
 # opposed to picking a port automatically.
@@ -72,9 +75,9 @@ ServerTransportPlugin obfs4 exec /usr/local/sbin/obfs4proxy
    ports (<=1024) even when not running as root by granting the
    `CAP_NET_BIND_SERVICE` capability with setcap:
 
-   `# setcap 'cap_net_bind_service=+ep' /usr/local/sbin/obfs4proxy`
+   `# setcap 'cap_net_bind_service=+ep' /usr/local/bin/obfs4proxy`
 
- * obfs4proxy can also act as a obfs2 and obfs3 client or server.  Adjust the
+ * obfs4proxy can also act as an obfs2 and obfs3 client or server.  Adjust the
    `ClientTransportPlugin` and `ServerTransportPlugin` lines in the torrc as
    appropriate.
 
