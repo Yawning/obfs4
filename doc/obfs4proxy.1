@@ -1,4 +1,4 @@
-.TH OBFS4PROXY 1 "2014-09-06"
+.TH OBFS4PROXY 1 "2014-09-24"
 .SH NAME
 obfs4proxy \- pluggable transport proxy for Tor, implementing obfs4
 .SH SYNOPSIS
@@ -52,6 +52,13 @@ The log file, assuming logging is enabled.
 The Bridge (server) auto-generated obfs4 bridge parameters file.  This file
 will not be created if the administrator specifies them in the \fBtorrc\fR
 via a \fBServerTransportOptions\fR directive.
+.RE
+.PP
+\fIDataDirectory\fR\fB/pt_state/obfs4_bridgeline.txt\fR
+.RS 4
+The Bridge (server) obfs4 bridge's client parameters.  This file is created
+and contains the \fBBridge\fR directive a client should add to their
+\fBtorrc\fR to connect to the running server's obfs4 instance.
 .RE
 .SH "CONFORMING TO"
 Tor Pluggable Transport Specification

@@ -1,4 +1,7 @@
 Changes in version 0.0.2 - UNRELEASED
+ - Write an example client bridge line suitable for use with the running obfs4
+   server instance to "obfs4_bridgeline.txt" for the convenience of bridge
+   operators.
  - Add a man page for obfs4proxy.
 
 Changes in version 0.0.1 - 2014-09-03

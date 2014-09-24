@@ -42,7 +42,8 @@ import (
 )
 
 const (
-	stateFile = "obfs4_state.json"
+	stateFile  = "obfs4_state.json"
+	bridgeFile = "obfs4_bridgeline.txt"
 )
 
 type jsonServerState struct {
@@ -91,10 +92,10 @@ func serverStateFromArgs(stateDir string, args *pt.Args) (*obfs4ServerState, err
 		js.IATMode = iatMode
 	}
 
-	return serverStateFromJSONServerState(&js)
+	return serverStateFromJSONServerState(stateDir, &js)
 }
 
-func serverStateFromJSONServerState(js *jsonServerState) (*obfs4ServerState, error) {
+func serverStateFromJSONServerState(stateDir string, js *jsonServerState) (*obfs4ServerState, error) {
 	var err error
 
 	st := new(obfs4ServerState)
@@ -111,6 +112,11 @@ func serverStateFromJSONServerState(js *jsonServerState) (*obfs4ServerState, err
 		return nil, fmt.Errorf("invalid iat-mode '%d'", js.IATMode)
 	}
 	st.iatMode = js.IATMode
+
+	// Generate a human readable summary of the configured endpoint.
+	if err = newBridgeFile(stateDir, st); err != nil {
+		return nil, err
+	}
 
 	return st, nil
 }
@@ -165,6 +171,32 @@ func newJSONServerState(stateDir string, js *jsonServerState) (err error) {
 	}
 
 	if err = ioutil.WriteFile(path.Join(stateDir, stateFile), encoded, 0600); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func newBridgeFile(stateDir string, st *obfs4ServerState) (err error) {
+	const prefix = "# obfs4 torrc client bridge line\n" +
+		"#\n" +
+		"# This file is an automatically generated bridge line based on\n" +
+		"# the current obfs4proxy configuration.  EDITING IT WILL HAVE\n" +
+		"# NO EFFECT.\n" +
+		"#\n" +
+		"# Before distributing this Bridge, edit the placeholder fields\n" +
+		"# to contain the actual values:\n" +
+		"#  <IP ADDRESS>  - The public IP address of your obfs4 bridge.\n" +
+		"#  <PORT>        - The TCP/IP port of your obfs4 bridge.\n" +
+		"#  <FINGERPRINT> - The bridge's fingerprint.\n\n"
+
+	bridgeLine := fmt.Sprintf("Bridge obfs4 <IP ADDRESS>:<PORT> <FINGERPRINT> node-id=%s public-key=%s iat-mode=%d\n",
+		st.nodeID.Hex(),
+		st.identityKey.Public().Hex(),
+		st.iatMode)
+
+	tmp := []byte(prefix + bridgeLine)
+	if err = ioutil.WriteFile(path.Join(stateDir, bridgeFile), tmp, 0600); err != nil {
 		return err
 	}
 
