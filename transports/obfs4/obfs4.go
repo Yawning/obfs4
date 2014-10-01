@@ -57,6 +57,7 @@ const (
 	privateKeyArg = "private-key"
 	seedArg       = "drbg-seed"
 	iatArg        = "iat-mode"
+	certArg       = "cert"
 
 	biasCmdArg = "obfs4-distBias"
 
@@ -122,8 +123,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 
 	// Store the arguments that should appear in our descriptor for the clients.
 	ptArgs := pt.Args{}
-	ptArgs.Add(nodeIDArg, st.nodeID.Hex())
-	ptArgs.Add(publicKeyArg, st.identityKey.Public().Hex())
+	ptArgs.Add(certArg, st.cert.String())
 	ptArgs.Add(iatArg, strconv.Itoa(st.iatMode))
 
 	// Initialize the replay filter.
@@ -154,15 +154,39 @@ func (cf *obfs4ClientFactory) Transport() base.Transport {
 func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 	var err error
 
-	// Handle the arguments.
-	nodeIDStr, ok := args.Get(nodeIDArg)
-	if !ok {
-		return nil, fmt.Errorf("missing argument '%s'", nodeIDArg)
-	}
 	var nodeID *ntor.NodeID
-	if nodeID, err = ntor.NodeIDFromHex(nodeIDStr); err != nil {
-		return nil, err
+	var publicKey *ntor.PublicKey
+
+	// The "new" (version >= 0.0.3) bridge lines use a unified "cert" argument
+	// for the Node ID and Public Key.
+	certStr, ok := args.Get(certArg)
+	if ok {
+		var cert *obfs4ServerCert
+		if cert, err = serverCertFromString(certStr); err != nil {
+			return nil, err
+		}
+		nodeID, publicKey = cert.unpack()
+	} else {
+		// The "old" style (version <= 0.0.2) bridge lines use separate Node ID
+		// and Public Key arguments in Base16 encoding and are a UX disaster.
+		nodeIDStr, ok := args.Get(nodeIDArg)
+		if !ok {
+			return nil, fmt.Errorf("missing argument '%s'", nodeIDArg)
+		}
+		if nodeID, err = ntor.NodeIDFromHex(nodeIDStr); err != nil {
+			return nil, err
+		}
+
+		publicKeyStr, ok := args.Get(publicKeyArg)
+		if !ok {
+			return nil, fmt.Errorf("missing argument '%s'", publicKeyArg)
+		}
+		if publicKey, err = ntor.PublicKeyFromHex(publicKeyStr); err != nil {
+			return nil, err
+		}
 	}
+
+	// IAT config is common across the two bridge line formats.
 	iatStr, ok := args.Get(iatArg)
 	if !ok {
 		return nil, fmt.Errorf("missing argument '%s'", iatArg)
@@ -171,15 +195,6 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 	iatMode, err = strconv.Atoi(iatStr)
 	if err != nil || iatMode < iatNone || iatMode > iatParanoid {
 		return nil, fmt.Errorf("invalid iat-mode '%d'", iatMode)
-	}
-
-	publicKeyStr, ok := args.Get(publicKeyArg)
-	if !ok {
-		return nil, fmt.Errorf("missing argument '%s'", publicKeyArg)
-	}
-	var publicKey *ntor.PublicKey
-	if publicKey, err = ntor.PublicKeyFromHex(publicKeyStr); err != nil {
-		return nil, err
 	}
 
 	// Generate the session key pair before connectiong to hide the Elligator2

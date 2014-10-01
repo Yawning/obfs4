@@ -1,3 +1,10 @@
+Changes in version 0.0.3 - UNRELEASED
+ - Change the obfs4 bridge line format to use a "cert" argument instead of the
+   previous "node-id" and "public-key" arguments.  The "cert" consists of the
+   Base64 encoded concatenation of the node ID and public key, with the
+   trailing padding removed.  Old style separated bridge lines are still valid,
+   but the newer representation is slightly more compact.
+
 Changes in version 0.0.2 - 2014-09-26
  - Write an example client bridge line suitable for use with the running obfs4
    server instance to "obfs4_bridgeline.txt" for the convenience of bridge

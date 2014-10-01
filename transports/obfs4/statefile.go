@@ -28,12 +28,14 @@
 package obfs4
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
@@ -44,6 +46,9 @@ import (
 const (
 	stateFile  = "obfs4_state.json"
 	bridgeFile = "obfs4_bridgeline.txt"
+
+	certSuffix = "=="
+	certLength = ntor.NodeIDLength + ntor.PublicKeyLength
 )
 
 type jsonServerState struct {
@@ -54,11 +59,55 @@ type jsonServerState struct {
 	IATMode    int    `json:"iat-mode"`
 }
 
+type obfs4ServerCert struct {
+	raw []byte
+}
+
+func (cert *obfs4ServerCert) String() string {
+	return strings.TrimSuffix(base64.StdEncoding.EncodeToString(cert.raw), certSuffix)
+}
+
+func (cert *obfs4ServerCert) unpack() (*ntor.NodeID, *ntor.PublicKey) {
+	if len(cert.raw) != certLength {
+		panic(fmt.Sprintf("cert length %d is invalid", len(cert.raw)))
+	}
+
+	nodeID, _ := ntor.NewNodeID(cert.raw[:ntor.NodeIDLength])
+	pubKey, _ := ntor.NewPublicKey(cert.raw[ntor.NodeIDLength:])
+
+	return nodeID, pubKey
+}
+
+func serverCertFromString(encoded string) (*obfs4ServerCert, error) {
+	decoded, err := base64.StdEncoding.DecodeString(encoded + certSuffix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode cert: %s", err)
+	}
+
+	if len(decoded) != certLength {
+		return nil, fmt.Errorf("cert length %d is invalid", len(decoded))
+	}
+
+	return &obfs4ServerCert{raw: decoded}, nil
+}
+
+func serverCertFromState(st *obfs4ServerState) *obfs4ServerCert {
+	cert := new(obfs4ServerCert)
+	cert.raw = append(st.nodeID.Bytes()[:], st.identityKey.Public().Bytes()[:]...)
+	return cert
+}
+
 type obfs4ServerState struct {
 	nodeID      *ntor.NodeID
 	identityKey *ntor.Keypair
 	drbgSeed    *drbg.Seed
 	iatMode     int
+
+	cert *obfs4ServerCert
+}
+
+func (st *obfs4ServerState) clientString() string {
+	return fmt.Sprintf("%s=%s %s=%d", certArg, st.cert, iatArg, st.iatMode)
 }
 
 func serverStateFromArgs(stateDir string, args *pt.Args) (*obfs4ServerState, error) {
@@ -112,6 +161,7 @@ func serverStateFromJSONServerState(stateDir string, js *jsonServerState) (*obfs
 		return nil, fmt.Errorf("invalid iat-mode '%d'", js.IATMode)
 	}
 	st.iatMode = js.IATMode
+	st.cert = serverCertFromState(st)
 
 	// Generate a human readable summary of the configured endpoint.
 	if err = newBridgeFile(stateDir, st); err != nil {
@@ -190,10 +240,8 @@ func newBridgeFile(stateDir string, st *obfs4ServerState) (err error) {
 		"#  <PORT>        - The TCP/IP port of your obfs4 bridge.\n" +
 		"#  <FINGERPRINT> - The bridge's fingerprint.\n\n"
 
-	bridgeLine := fmt.Sprintf("Bridge obfs4 <IP ADDRESS>:<PORT> <FINGERPRINT> node-id=%s public-key=%s iat-mode=%d\n",
-		st.nodeID.Hex(),
-		st.identityKey.Public().Hex(),
-		st.iatMode)
+	bridgeLine := fmt.Sprintf("Bridge obfs4 <IP ADDRESS>:<PORT> <FINGERPRINT> %s\n",
+		st.clientString())
 
 	tmp := []byte(prefix + bridgeLine)
 	if err = ioutil.WriteFile(path.Join(stateDir, bridgeFile), tmp, 0600); err != nil {
