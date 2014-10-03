@@ -1,3 +1,6 @@
+Changes in version 0.0.4 - UNRELEASED
+ - Improve the runtime performance of the obfs4 handshake tests.
+
 Changes in version 0.0.3 - 2014-10-01
  - Change the obfs4 bridge line format to use a "cert" argument instead of the
    previous "node-id" and "public-key" arguments.  The "cert" consists of the

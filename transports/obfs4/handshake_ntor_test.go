@@ -35,19 +35,23 @@ import (
 	"git.torproject.org/pluggable-transports/obfs4.git/common/replayfilter"
 )
 
-func TestHandshakeNtor(t *testing.T) {
-	// Generate the server node id and id keypair.
+func TestHandshakeNtorClient(t *testing.T) {
+	// Generate the server node id and id keypair, and ephemeral session keys.
 	nodeID, _ := ntor.NewNodeID([]byte("\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13"))
 	idKeypair, _ := ntor.NewKeypair(false)
 	serverFilter, _ := replayfilter.New(replayTTL)
+	clientKeypair, err := ntor.NewKeypair(true)
+	if err != nil {
+		t.Fatalf("client: ntor.NewKeypair failed: %s", err)
+	}
+	serverKeypair, err := ntor.NewKeypair(true)
+	if err != nil {
+		t.Fatalf("server: ntor.NewKeypair failed: %s", err)
+	}
 
 	// Test client handshake padding.
 	for l := clientMinPadLength; l <= clientMaxPadLength; l++ {
 		// Generate the client state and override the pad length.
-		clientKeypair, err := ntor.NewKeypair(true)
-		if err != nil {
-			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
-		}
 		clientHs := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
 		clientHs.padLen = l
 
@@ -67,10 +71,6 @@ func TestHandshakeNtor(t *testing.T) {
 		}
 
 		// Generate the server state and override the pad length.
-		serverKeypair, err := ntor.NewKeypair(true)
-		if err != nil {
-			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
-		}
 		serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 		serverHs.padLen = serverMinPadLength
 
@@ -102,13 +102,52 @@ func TestHandshakeNtor(t *testing.T) {
 		}
 	}
 
+	// Test oversized client padding.
+	clientHs := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
+	if err != nil {
+		t.Fatalf("newClientHandshake failed: %s", err)
+	}
+	clientHs.padLen = clientMaxPadLength + 1
+	clientBlob, err := clientHs.generateHandshake()
+	if err != nil {
+		t.Fatalf("clientHandshake.generateHandshake() (forced oversize) failed: %s", err)
+	}
+	serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
+	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
+	if err == nil {
+		t.Fatalf("serverHandshake.parseClientHandshake() succeded (oversized)")
+	}
+
+	// Test undersized client padding.
+	clientHs.padLen = clientMinPadLength - 1
+	clientBlob, err = clientHs.generateHandshake()
+	if err != nil {
+		t.Fatalf("clientHandshake.generateHandshake() (forced undersize) failed: %s", err)
+	}
+	serverHs = newServerHandshake(nodeID, idKeypair, serverKeypair)
+	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
+	if err == nil {
+		t.Fatalf("serverHandshake.parseClientHandshake() succeded (undersized)")
+	}
+}
+
+func TestHandshakeNtorServer(t *testing.T) {
+	// Generate the server node id and id keypair, and ephemeral session keys.
+	nodeID, _ := ntor.NewNodeID([]byte("\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13"))
+	idKeypair, _ := ntor.NewKeypair(false)
+	serverFilter, _ := replayfilter.New(replayTTL)
+	clientKeypair, err := ntor.NewKeypair(true)
+	if err != nil {
+		t.Fatalf("client: ntor.NewKeypair failed: %s", err)
+	}
+	serverKeypair, err := ntor.NewKeypair(true)
+	if err != nil {
+		t.Fatalf("server: ntor.NewKeypair failed: %s", err)
+	}
+
 	// Test server handshake padding.
 	for l := serverMinPadLength; l <= serverMaxPadLength+inlineSeedFrameLength; l++ {
 		// Generate the client state and override the pad length.
-		clientKeypair, err := ntor.NewKeypair(true)
-		if err != nil {
-			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
-		}
 		clientHs := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
 		clientHs.padLen = clientMinPadLength
 
@@ -122,10 +161,6 @@ func TestHandshakeNtor(t *testing.T) {
 		}
 
 		// Generate the server state and override the pad length.
-		serverKeypair, err := ntor.NewKeypair(true)
-		if err != nil {
-			t.Fatalf("[%d:0] ntor.NewKeypair failed: %s", l, err)
-		}
 		serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 		serverHs.padLen = l
 
@@ -157,23 +192,14 @@ func TestHandshakeNtor(t *testing.T) {
 	}
 
 	// Test oversized client padding.
-	clientKeypair, err := ntor.NewKeypair(true)
-	if err != nil {
-		t.Fatalf("ntor.NewKeypair failed: %s", err)
-	}
 	clientHs := newClientHandshake(nodeID, idKeypair.Public(), clientKeypair)
 	if err != nil {
 		t.Fatalf("newClientHandshake failed: %s", err)
 	}
-
 	clientHs.padLen = clientMaxPadLength + 1
 	clientBlob, err := clientHs.generateHandshake()
 	if err != nil {
 		t.Fatalf("clientHandshake.generateHandshake() (forced oversize) failed: %s", err)
-	}
-	serverKeypair, err := ntor.NewKeypair(true)
-	if err != nil {
-		t.Fatalf("ntor.NewKeypair failed: %s", err)
 	}
 	serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
@@ -197,7 +223,7 @@ func TestHandshakeNtor(t *testing.T) {
 	//
 	// NB: serverMaxPadLength isn't the real maxPadLength that triggers client
 	// rejection, because the implementation is written with the asusmption
-	// that/ the PRNG_SEED is also inlined with the response.  Thus the client
+	// that the PRNG_SEED is also inlined with the response.  Thus the client
 	// actually accepts longer padding.  The server handshake test and this
 	// test adjust around that.
 	clientHs.padLen = clientMinPadLength
