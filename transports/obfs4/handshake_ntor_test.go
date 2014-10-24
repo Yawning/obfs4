@@ -83,7 +83,7 @@ func TestHandshakeNtorClient(t *testing.T) {
 		// Genrate what the server will send to the client.
 		serverBlob, err := serverHs.generateHandshake()
 		if err != nil {
-			t.Fatal("[%d:0]: serverHandshake.generateHandshake() failed: %s", l, err)
+			t.Fatalf("[%d:0]: serverHandshake.generateHandshake() failed: %s", l, err)
 		}
 
 		// Parse the server handshake message.
@@ -173,7 +173,7 @@ func TestHandshakeNtorServer(t *testing.T) {
 		// Genrate what the server will send to the client.
 		serverBlob, err := serverHs.generateHandshake()
 		if err != nil {
-			t.Fatal("[%d:1]: serverHandshake.generateHandshake() failed: %s", l, err)
+			t.Fatalf("[%d:1]: serverHandshake.generateHandshake() failed: %s", l, err)
 		}
 
 		// Parse the server handshake message.
@@ -239,7 +239,7 @@ func TestHandshakeNtorServer(t *testing.T) {
 	}
 	serverBlob, err := serverHs.generateHandshake()
 	if err != nil {
-		t.Fatal("serverHandshake.generateHandshake() (forced oversize) failed: %s", err)
+		t.Fatalf("serverHandshake.generateHandshake() (forced oversize) failed: %s", err)
 	}
 	_, _, err = clientHs.parseServerHandshake(serverBlob)
 	if err == nil {
