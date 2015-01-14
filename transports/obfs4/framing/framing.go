@@ -67,7 +67,7 @@ import (
 	"fmt"
 	"io"
 
-	"code.google.com/p/go.crypto/nacl/secretbox"
+	"golang.org/x/crypto/nacl/secretbox"
 
 	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
 	"git.torproject.org/pluggable-transports/obfs4.git/common/drbg"

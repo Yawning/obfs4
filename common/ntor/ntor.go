@@ -43,8 +43,8 @@ import (
 	"fmt"
 	"io"
 
-	"code.google.com/p/go.crypto/curve25519"
-	"code.google.com/p/go.crypto/hkdf"
+	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/hkdf"
 
 	"github.com/agl/ed25519/extra25519"
 
