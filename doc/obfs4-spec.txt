@@ -269,6 +269,17 @@
    The maximum allowed frame length is 1448 bytes, which allows up to 1427
    bytes of useful payload to be transmitted per "frame".
 
+   The NaCl secretbox (Poly1305/XSalsa20) nonce format is:
+
+      uint8_t[24] prefix (Fixed)
+      uint64_t    counter (Big endian)
+
+   The counter is initialized to 1, and is incremented on each frame.  Since
+   the protocol is designed to be used over a reliable medium, the nonce is not
+   transmitted over the wire as both sides of the conversation know the prefix
+   and the initial counter value.  It is imperative that the counter does not
+   wrap, and sessions MUST terminate before 2^64 frames are sent.
+
    If unsealing a secretbox ever fails (due to a Tag mismatch), implementations
    MUST drop the connection.
 
