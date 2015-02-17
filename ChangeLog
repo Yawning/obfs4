@@ -1,4 +1,4 @@
-Changes in version 0.0.4 - UNRELEASED
+Changes in version 0.0.4 - 2015-02-17
  - Improve the runtime performance of the obfs4 handshake tests.
  - Changed the go.crypto import path to the new location (golang.org/x/crypto).
  - Added client only support for ScrambleSuit.
