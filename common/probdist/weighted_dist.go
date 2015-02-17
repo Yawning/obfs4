@@ -31,9 +31,11 @@
 package probdist
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
 	"math/rand"
+	"sync"
 
 	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
 	"git.torproject.org/pluggable-transports/obfs4.git/common/drbg"
@@ -46,6 +48,8 @@ const (
 
 // WeightedDist is a weighted distribution.
 type WeightedDist struct {
+	sync.Mutex
+
 	minValue int
 	maxValue int
 	biased   bool
@@ -192,6 +196,9 @@ func (w *WeightedDist) Reset(seed *drbg.Seed) {
 	drbg, _ := drbg.NewHashDrbg(seed)
 	rng := rand.New(drbg)
 
+	w.Lock()
+	defer w.Unlock()
+
 	w.genValues(rng)
 	if w.biased {
 		w.genBiasedWeights(rng)
@@ -205,6 +212,9 @@ func (w *WeightedDist) Reset(seed *drbg.Seed) {
 func (w *WeightedDist) Sample() int {
 	var idx int
 
+	w.Lock()
+	defer w.Unlock()
+
 	// Generate a fair die roll from an $n$-sided die; call the side $i$.
 	i := csrand.Intn(len(w.values))
 	// Flip a biased coin that comes up heads with probability $Prob[i]$.
@@ -217,4 +227,19 @@ func (w *WeightedDist) Sample() int {
 	}
 
 	return w.minValue + w.values[idx]
+}
+
+// String returns a dump of the distribution table.
+func (w *WeightedDist) String() string {
+	var buf bytes.Buffer
+
+	buf.WriteString("[ ")
+	for i, v := range w.values {
+		p := w.weights[i]
+		if p > 0.01 { // Squelch tiny probabilities.
+			buf.WriteString(fmt.Sprintf("%d: %f ", v, p)) 
+		}
+	}
+	buf.WriteString("]")
+	return buf.String()
 }
