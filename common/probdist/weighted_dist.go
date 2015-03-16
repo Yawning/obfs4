@@ -237,7 +237,7 @@ func (w *WeightedDist) String() string {
 	for i, v := range w.values {
 		p := w.weights[i]
 		if p > 0.01 { // Squelch tiny probabilities.
-			buf.WriteString(fmt.Sprintf("%d: %f ", v, p)) 
+			buf.WriteString(fmt.Sprintf("%d: %f ", v, p))
 		}
 	}
 	buf.WriteString("]")

@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	transportName = "obfs2"
+	transportName   = "obfs2"
 	sharedSecretArg = "shared-secret"
 
 	clientHandshakeTimeout = time.Duration(30) * time.Second

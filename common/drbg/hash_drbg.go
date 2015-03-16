@@ -30,8 +30,8 @@
 package drbg
 
 import (
-	"encoding/hex"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"hash"
 

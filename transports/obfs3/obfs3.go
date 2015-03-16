@@ -351,7 +351,6 @@ func (conn *obfs3Conn) Write(b []byte) (n int, err error) {
 	return conn.tx.Write(b)
 }
 
-
 var _ base.ClientFactory = (*obfs3ClientFactory)(nil)
 var _ base.ServerFactory = (*obfs3ServerFactory)(nil)
 var _ base.Transport = (*Transport)(nil)
