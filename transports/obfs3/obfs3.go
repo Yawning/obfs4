@@ -261,13 +261,13 @@ func (conn *obfs3Conn) kdf(sharedSecret []byte) (err error) {
 	respStream := cipher.NewCTR(respBlock, respSecret[keyLen:])
 
 	if conn.isInitiator {
-		conn.tx = &cipher.StreamWriter{initStream, conn.Conn, nil}
-		conn.rx = &cipher.StreamReader{respStream, conn.rxBuf}
+		conn.tx = &cipher.StreamWriter{S: initStream, W: conn.Conn}
+		conn.rx = &cipher.StreamReader{S: respStream, R: conn.rxBuf}
 		conn.txMagic = initMagic
 		conn.rxMagic = respMagic
 	} else {
-		conn.tx = &cipher.StreamWriter{respStream, conn.Conn, nil}
-		conn.rx = &cipher.StreamReader{initStream, conn.rxBuf}
+		conn.tx = &cipher.StreamWriter{S: respStream, W: conn.Conn}
+		conn.rx = &cipher.StreamReader{S: initStream, R: conn.rxBuf}
 		conn.txMagic = respMagic
 		conn.rxMagic = initMagic
 	}

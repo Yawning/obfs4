@@ -235,7 +235,7 @@ func (conn *obfs2Conn) handshake() (err error) {
 		return
 	}
 	txStream := cipher.NewCTR(txBlock, padIV)
-	conn.tx = &cipher.StreamWriter{txStream, conn.Conn, nil}
+	conn.tx = &cipher.StreamWriter{S: txStream, W: conn.Conn}
 	if _, err = conn.Conn.Write(seed[:]); err != nil {
 		return
 	}
@@ -262,7 +262,7 @@ func (conn *obfs2Conn) handshake() (err error) {
 		return
 	}
 	rxStream := cipher.NewCTR(rxBlock, peerIV)
-	conn.rx = &cipher.StreamReader{rxStream, conn.Conn}
+	conn.rx = &cipher.StreamReader{S: rxStream, R: conn.Conn}
 	hsHdr := make([]byte, hsLen)
 	if _, err = io.ReadFull(conn, hsHdr[:]); err != nil {
 		return
