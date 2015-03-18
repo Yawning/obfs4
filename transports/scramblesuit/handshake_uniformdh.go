@@ -109,8 +109,7 @@ func (hs *ssDHClientHandshake) parseServerHandshake(resp []byte) (int, []byte, e
 
 		// Pull out the public key, and derive the server mark.
 		hs.serverPublicKey = &uniformdh.PublicKey{}
-		err := hs.serverPublicKey.SetBytes(y)
-		if err != nil {
+		if err := hs.serverPublicKey.SetBytes(y); err != nil {
 			return 0, nil, err
 		}
 		hs.mac.Reset()

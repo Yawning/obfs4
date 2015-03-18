@@ -230,8 +230,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 		return
 	}
 
-	err = copyLoop(conn, remote)
-	if err != nil {
+	if err = copyLoop(conn, remote); err != nil {
 		warnf("%s(%s) - closed connection: %s", name, addrStr, elideError(err))
 	} else {
 		infof("%s(%s) - closed connection", name, addrStr)
@@ -323,8 +322,7 @@ func serverHandler(f base.ServerFactory, conn net.Conn, info *pt.ServerInfo) {
 	}
 	defer orConn.Close()
 
-	err = copyLoop(orConn, remote)
-	if err != nil {
+	if err = copyLoop(orConn, remote); err != nil {
 		warnf("%s(%s) - closed connection: %s", name, addrStr, elideError(err))
 	} else {
 		infof("%s(%s) - closed connection", name, addrStr)

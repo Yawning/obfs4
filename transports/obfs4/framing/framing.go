@@ -187,8 +187,7 @@ func (encoder *Encoder) Encode(frame, payload []byte) (n int, err error) {
 
 	// Generate a new nonce.
 	var nonce [nonceLength]byte
-	err = encoder.nonce.bytes(&nonce)
-	if err != nil {
+	if err = encoder.nonce.bytes(&nonce); err != nil {
 		return 0, err
 	}
 	encoder.nonce.counter++
@@ -256,8 +255,7 @@ func (decoder *Decoder) Decode(data []byte, frames *bytes.Buffer) (int, error) {
 		}
 
 		// Derive the nonce the peer used.
-		err = decoder.nonce.bytes(&decoder.nextNonce)
-		if err != nil {
+		if err = decoder.nonce.bytes(&decoder.nextNonce); err != nil {
 			return 0, err
 		}
 
