@@ -166,56 +166,56 @@ func newObfs3ServerConn(conn net.Conn) (c *obfs3Conn, err error) {
 	return
 }
 
-func (conn *obfs3Conn) handshake() (err error) {
+func (conn *obfs3Conn) handshake() error {
 	// The party who opens the connection is the 'initiator'; the one who
 	// accepts it is the 'responder'.  Each begins by generating a
 	// UniformDH keypair, and a random number PADLEN in [0, MAX_PADDING/2].
 	// Both parties then send:
 	//
 	//  PUB_KEY | WR(PADLEN)
-	var privateKey *uniformdh.PrivateKey
-	if privateKey, err = uniformdh.GenerateKey(csrand.Reader); err != nil {
-		return
+	privateKey, err := uniformdh.GenerateKey(csrand.Reader)
+	if err != nil {
+		return err
 	}
 	padLen := csrand.IntRange(0, maxPadding/2)
 	blob := make([]byte, uniformdh.Size+padLen)
-	var publicKey []byte
-	if publicKey, err = privateKey.PublicKey.Bytes(); err != nil {
-		return
+	publicKey, err := privateKey.PublicKey.Bytes()
+	if err != nil {
+		return err
 	}
 	copy(blob[0:], publicKey)
-	if err = csrand.Bytes(blob[uniformdh.Size:]); err != nil {
-		return
+	if err := csrand.Bytes(blob[uniformdh.Size:]); err != nil {
+		return err
 	}
-	if _, err = conn.Conn.Write(blob); err != nil {
-		return
+	if _, err := conn.Conn.Write(blob); err != nil {
+		return err
 	}
 
 	// Read the public key from the peer.
 	rawPeerPublicKey := make([]byte, uniformdh.Size)
-	if _, err = io.ReadFull(conn.Conn, rawPeerPublicKey); err != nil {
-		return
+	if _, err := io.ReadFull(conn.Conn, rawPeerPublicKey); err != nil {
+		return err
 	}
 	var peerPublicKey uniformdh.PublicKey
-	if err = peerPublicKey.SetBytes(rawPeerPublicKey); err != nil {
-		return
+	if err := peerPublicKey.SetBytes(rawPeerPublicKey); err != nil {
+		return err
 	}
 
 	// After retrieving the public key of the other end, each party
 	// completes the DH key exchange and generates a shared-secret for the
 	// session (named SHARED_SECRET).
-	var sharedSecret []byte
-	if sharedSecret, err = uniformdh.Handshake(privateKey, &peerPublicKey); err != nil {
-		return
+	sharedSecret, err := uniformdh.Handshake(privateKey, &peerPublicKey)
+	if err != nil {
+		return err
 	}
-	if err = conn.kdf(sharedSecret); err != nil {
-		return
+	if err := conn.kdf(sharedSecret); err != nil {
+		return err
 	}
 
-	return
+	return nil
 }
 
-func (conn *obfs3Conn) kdf(sharedSecret []byte) (err error) {
+func (conn *obfs3Conn) kdf(sharedSecret []byte) error {
 	// Using that shared-secret each party derives its encryption keys as
 	// follows:
 	//
@@ -248,14 +248,14 @@ func (conn *obfs3Conn) kdf(sharedSecret []byte) (err error) {
 	//
 	// Note: To have this be the last place where the shared secret is used,
 	// also generate the magic value to send/scan for here.
-	var initBlock cipher.Block
-	if initBlock, err = aes.NewCipher(initSecret[:keyLen]); err != nil {
+	initBlock, err := aes.NewCipher(initSecret[:keyLen])
+	if err != nil {
 		return err
 	}
 	initStream := cipher.NewCTR(initBlock, initSecret[keyLen:])
 
-	var respBlock cipher.Block
-	if respBlock, err = aes.NewCipher(respSecret[:keyLen]); err != nil {
+	respBlock, err := aes.NewCipher(respSecret[:keyLen])
+	if err != nil {
 		return err
 	}
 	respStream := cipher.NewCTR(respBlock, respSecret[keyLen:])
@@ -272,7 +272,7 @@ func (conn *obfs3Conn) kdf(sharedSecret []byte) (err error) {
 		conn.rxMagic = initMagic
 	}
 
-	return
+	return nil
 }
 
 func (conn *obfs3Conn) findPeerMagic() error {

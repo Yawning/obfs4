@@ -183,7 +183,7 @@ func jsonServerStateFromFile(stateDir string, js *jsonServerState) error {
 		return err
 	}
 
-	if err = json.Unmarshal(f, js); err != nil {
+	if err := json.Unmarshal(f, js); err != nil {
 		return fmt.Errorf("failed to load statefile '%s': %s", fPath, err)
 	}
 
@@ -227,7 +227,7 @@ func newJSONServerState(stateDir string, js *jsonServerState) (err error) {
 	return nil
 }
 
-func newBridgeFile(stateDir string, st *obfs4ServerState) (err error) {
+func newBridgeFile(stateDir string, st *obfs4ServerState) error {
 	const prefix = "# obfs4 torrc client bridge line\n" +
 		"#\n" +
 		"# This file is an automatically generated bridge line based on\n" +
@@ -244,7 +244,7 @@ func newBridgeFile(stateDir string, st *obfs4ServerState) (err error) {
 		st.clientString())
 
 	tmp := []byte(prefix + bridgeLine)
-	if err = ioutil.WriteFile(path.Join(stateDir, bridgeFile), tmp, 0600); err != nil {
+	if err := ioutil.WriteFile(path.Join(stateDir, bridgeFile), tmp, 0600); err != nil {
 		return err
 	}
 

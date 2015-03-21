@@ -417,10 +417,9 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 
 func makePad(padLen int) ([]byte, error) {
 	pad := make([]byte, padLen)
-	err := csrand.Bytes(pad)
-	if err != nil {
+	if err := csrand.Bytes(pad); err != nil {
 		return nil, err
 	}
 
-	return pad, err
+	return pad, nil
 }

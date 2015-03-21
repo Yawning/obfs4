@@ -69,7 +69,7 @@ func (e InvalidPayloadLengthError) Error() string {
 
 var zeroPadBytes [maxPacketPaddingLength]byte
 
-func (conn *obfs4Conn) makePacket(w io.Writer, pktType uint8, data []byte, padLen uint16) (err error) {
+func (conn *obfs4Conn) makePacket(w io.Writer, pktType uint8, data []byte, padLen uint16) error {
 	var pkt [framing.MaximumFramePayloadLength]byte
 
 	if len(data)+int(padLen) > maxPacketPayloadLength {
@@ -93,22 +93,19 @@ func (conn *obfs4Conn) makePacket(w io.Writer, pktType uint8, data []byte, padLe
 
 	// Encode the packet in an AEAD frame.
 	var frame [framing.MaximumSegmentLength]byte
-	frameLen := 0
-	frameLen, err = conn.encoder.Encode(frame[:], pkt[:pktLen])
+	frameLen, err := conn.encoder.Encode(frame[:], pkt[:pktLen])
 	if err != nil {
 		// All encoder errors are fatal.
-		return
+		return err
 	}
-	var wrLen int
-	wrLen, err = w.Write(frame[:frameLen])
+	wrLen, err := w.Write(frame[:frameLen])
 	if err != nil {
-		return
+		return err
 	} else if wrLen < frameLen {
-		err = io.ErrShortWrite
-		return
+		return io.ErrShortWrite
 	}
 
-	return
+	return nil
 }
 
 func (conn *obfs4Conn) readPackets() (err error) {

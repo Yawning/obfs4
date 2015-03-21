@@ -187,7 +187,7 @@ func newObfs2ServerConn(conn net.Conn) (c *obfs2Conn, err error) {
 	return
 }
 
-func (conn *obfs2Conn) handshake() (err error) {
+func (conn *obfs2Conn) handshake() error {
 	// Each begins by generating a seed and a padding key as follows.
 	// The initiator generates:
 	//
@@ -202,8 +202,8 @@ func (conn *obfs2Conn) handshake() (err error) {
 	// Each then generates a random number PADLEN in range from 0 through
 	// MAX_PADDING (inclusive).
 	var seed [seedLen]byte
-	if err = csrand.Bytes(seed[:]); err != nil {
-		return
+	if err := csrand.Bytes(seed[:]); err != nil {
+		return err
 	}
 	var padMagic []byte
 	if conn.isInitiator {
@@ -218,8 +218,8 @@ func (conn *obfs2Conn) handshake() (err error) {
 	binary.BigEndian.PutUint32(hsBlob[0:4], magicValue)
 	binary.BigEndian.PutUint32(hsBlob[4:8], padLen)
 	if padLen > 0 {
-		if err = csrand.Bytes(hsBlob[8:]); err != nil {
-			return
+		if err := csrand.Bytes(hsBlob[8:]); err != nil {
+			return err
 		}
 	}
 
@@ -230,25 +230,25 @@ func (conn *obfs2Conn) handshake() (err error) {
 	// and the responder sends:
 	//
 	//  RESP_SEED | E(RESP_PAD_KEY, UINT32(MAGIC_VALUE) | UINT32(PADLEN) | WR(PADLEN))
-	var txBlock cipher.Block
-	if txBlock, err = aes.NewCipher(padKey); err != nil {
-		return
+	txBlock, err := aes.NewCipher(padKey)
+	if err != nil {
+		return err
 	}
 	txStream := cipher.NewCTR(txBlock, padIV)
 	conn.tx = &cipher.StreamWriter{S: txStream, W: conn.Conn}
-	if _, err = conn.Conn.Write(seed[:]); err != nil {
-		return
+	if _, err := conn.Conn.Write(seed[:]); err != nil {
+		return err
 	}
-	if _, err = conn.Write(hsBlob); err != nil {
-		return
+	if _, err := conn.Write(hsBlob); err != nil {
+		return err
 	}
 
 	// Upon receiving the SEED from the other party, each party derives
 	// the other party's padding key value as above, and decrypts the next
 	// 8 bytes of the key establishment message.
 	var peerSeed [seedLen]byte
-	if _, err = io.ReadFull(conn.Conn, peerSeed[:]); err != nil {
-		return
+	if _, err := io.ReadFull(conn.Conn, peerSeed[:]); err != nil {
+		return err
 	}
 	var peerPadMagic []byte
 	if conn.isInitiator {
@@ -257,46 +257,44 @@ func (conn *obfs2Conn) handshake() (err error) {
 		peerPadMagic = []byte(initiatorPadString)
 	}
 	peerKey, peerIV := hsKdf(peerPadMagic, peerSeed[:], !conn.isInitiator)
-	var rxBlock cipher.Block
-	if rxBlock, err = aes.NewCipher(peerKey); err != nil {
-		return
+	rxBlock, err := aes.NewCipher(peerKey)
+	if err != nil {
+		return err
 	}
 	rxStream := cipher.NewCTR(rxBlock, peerIV)
 	conn.rx = &cipher.StreamReader{S: rxStream, R: conn.Conn}
 	hsHdr := make([]byte, hsLen)
-	if _, err = io.ReadFull(conn, hsHdr[:]); err != nil {
-		return
+	if _, err := io.ReadFull(conn, hsHdr[:]); err != nil {
+		return err
 	}
 
 	// If the MAGIC_VALUE does not match, or the PADLEN value is greater than
 	// MAX_PADDING, the party receiving it should close the connection
 	// immediately.
 	if peerMagic := binary.BigEndian.Uint32(hsHdr[0:4]); peerMagic != magicValue {
-		err = fmt.Errorf("invalid magic value: %x", peerMagic)
-		return
+		return fmt.Errorf("invalid magic value: %x", peerMagic)
 	}
 	padLen = binary.BigEndian.Uint32(hsHdr[4:8])
 	if padLen > maxPadding {
-		err = fmt.Errorf("padlen too long: %d", padLen)
-		return
+		return fmt.Errorf("padlen too long: %d", padLen)
 	}
 
 	// Otherwise, it should read the remaining PADLEN bytes of padding data
 	// and discard them.
 	tmp := make([]byte, padLen)
-	if _, err = io.ReadFull(conn.Conn, tmp); err != nil { // Note: Skips AES.
-		return
+	if _, err := io.ReadFull(conn.Conn, tmp); err != nil { // Note: Skips AES.
+		return err
 	}
 
 	// Derive the actual keys.
-	if err = conn.kdf(seed[:], peerSeed[:]); err != nil {
-		return
+	if err := conn.kdf(seed[:], peerSeed[:]); err != nil {
+		return err
 	}
 
-	return
+	return nil
 }
 
-func (conn *obfs2Conn) kdf(seed, peerSeed []byte) (err error) {
+func (conn *obfs2Conn) kdf(seed, peerSeed []byte) error {
 	// Additional keys are then derived as:
 	//
 	//  INIT_SECRET = MAC("Initiator obfuscated data", INIT_SEED|RESP_SEED)
@@ -315,16 +313,16 @@ func (conn *obfs2Conn) kdf(seed, peerSeed []byte) (err error) {
 	}
 
 	initKey, initIV := hsKdf([]byte(initiatorKdfString), combSeed, true)
-	var initBlock cipher.Block
-	if initBlock, err = aes.NewCipher(initKey); err != nil {
-		return
+	initBlock, err := aes.NewCipher(initKey)
+	if err != nil {
+		return err
 	}
 	initStream := cipher.NewCTR(initBlock, initIV)
 
 	respKey, respIV := hsKdf([]byte(responderKdfString), combSeed, false)
-	var respBlock cipher.Block
-	if respBlock, err = aes.NewCipher(respKey); err != nil {
-		return
+	respBlock, err := aes.NewCipher(respKey)
+	if err != nil {
+		return err
 	}
 	respStream := cipher.NewCTR(respBlock, respIV)
 
@@ -336,7 +334,7 @@ func (conn *obfs2Conn) kdf(seed, peerSeed []byte) (err error) {
 		conn.rx.S = initStream
 	}
 
-	return
+	return nil
 }
 
 func hsKdf(magic, seed []byte, isInitiator bool) (padKey, padIV []byte) {

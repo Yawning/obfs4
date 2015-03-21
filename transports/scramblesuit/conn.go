@@ -441,20 +441,23 @@ handshakeUDH:
 	}
 }
 
-func (conn *ssConn) initCrypto(seed []byte) (err error) {
+func (conn *ssConn) initCrypto(seed []byte) error {
 	// Use HKDF-SHA256 (Expand only, no Extract) to generate session keys from
 	// initial keying material.
 	okm := hkdfExpand(sha256.New, seed, nil, kdfSecretLength)
-	if conn.txCrypto, err = newCryptoState(okm[0:32], okm[32:40], okm[80:112]); err != nil {
-		return
+	var err error
+	conn.txCrypto, err = newCryptoState(okm[0:32], okm[32:40], okm[80:112])
+	if err != nil {
+		return err
 	}
-	if conn.rxCrypto, err = newCryptoState(okm[40:72], okm[72:80], okm[112:144]); err != nil {
-		return
+	conn.rxCrypto, err = newCryptoState(okm[40:72], okm[72:80], okm[112:144])
+	if err != nil {
+		return err
 	}
-	return
+	return nil
 }
 
-func (conn *ssConn) padBurst(burst *bytes.Buffer, sampleLen int) (err error) {
+func (conn *ssConn) padBurst(burst *bytes.Buffer, sampleLen int) error {
 	// Burst contains the fully encrypted+MACed outgoing payload that will be
 	// written to the network.  Pad it out so that the last segment (based on
 	// the ScrambleSuit MTU) is sampleLen bytes.
@@ -473,18 +476,17 @@ func (conn *ssConn) padBurst(burst *bytes.Buffer, sampleLen int) (err error) {
 	}
 
 	if padLen == 0 {
-		return
-	} else if padLen > maxSegmentLength {
+		return nil
+	}
+	if padLen > maxSegmentLength {
 		// Note: packetmorpher.py: getPadding is slightly wrong and only
 		// accounts for one of the two packet headers.
-		if err = conn.makePacket(burst, pktPayload, nil, 700-pktOverhead); err != nil {
-			return
+		if err := conn.makePacket(burst, pktPayload, nil, 700-pktOverhead); err != nil {
+			return err
 		}
-		err = conn.makePacket(burst, pktPayload, nil, padLen-(700+2*pktOverhead))
-	} else {
-		err = conn.makePacket(burst, pktPayload, nil, padLen-pktOverhead)
+		return conn.makePacket(burst, pktPayload, nil, padLen-(700+2*pktOverhead))
 	}
-	return
+	return conn.makePacket(burst, pktPayload, nil, padLen-pktOverhead)
 }
 
 func newScrambleSuitClientConn(conn net.Conn, tStore *ssTicketStore, ca *ssClientArgs) (net.Conn, error) {
