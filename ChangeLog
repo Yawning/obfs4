@@ -1,5 +1,5 @@
 Changes in version 0.0.5 - UNRELEASED:
- - Go vet/fmt fixes.  Patches by mvdan.
+ - Go vet/fmt fixes, and misc. code cleanups.  Patches by mvdan.
 
 Changes in version 0.0.4 - 2015-02-17
  - Improve the runtime performance of the obfs4 handshake tests.
