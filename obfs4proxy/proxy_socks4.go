@@ -41,7 +41,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"code.google.com/p/go.net/proxy"
+	"golang.org/x/net/proxy"
 )
 
 // socks4Proxy is a SOCKS4 proxy.

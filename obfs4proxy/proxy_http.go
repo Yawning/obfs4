@@ -36,7 +36,7 @@ import (
 	"net/url"
 	"time"
 
-	"code.google.com/p/go.net/proxy"
+	"golang.org/x/net/proxy"
 )
 
 // httpProxy is a HTTP connect proxy.

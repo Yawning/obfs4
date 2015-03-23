@@ -35,7 +35,7 @@ listed for clarity.
  * Go 1.2.0 or later.   Prior versions of Go (Eg: 1.0.2) are missing certain
    important parts of the runtime library like a SHA256 implementation.
  * go.crypto (https://golang.org/x/crypto)
- * go.net (https://code.google.com/p/go.net)
+ * go.net (https://golang.org/x/net)
  * ed25519/extra25519 (https://github.com/agl/ed25519/extra25519)
  * SipHash-2-4 (https://github.com/dchest/siphash)
  * goptlib (https://git.torproject.org/pluggable-transports/goptlib.git)

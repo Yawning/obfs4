@@ -43,7 +43,7 @@ import (
 	"sync"
 	"syscall"
 
-	"code.google.com/p/go.net/proxy"
+	"golang.org/x/net/proxy"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"git.torproject.org/pluggable-transports/obfs4.git/transports"

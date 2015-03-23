@@ -1,5 +1,6 @@
 Changes in version 0.0.5 - UNRELEASED:
  - Go vet/fmt fixes, and misc. code cleanups.  Patches by mvdan.
+ - Changed the go.net import path to the new location (golang.org/x/net).
 
 Changes in version 0.0.4 - 2015-02-17
  - Improve the runtime performance of the obfs4 handshake tests.
