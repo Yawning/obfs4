@@ -38,6 +38,7 @@ import (
 	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs3"
 	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs4"
 	"git.torproject.org/pluggable-transports/obfs4.git/transports/scramblesuit"
+	"git.torproject.org/pluggable-transports/obfs4.git/transports/DustMinus"
 )
 
 var transportMapLock sync.Mutex
@@ -90,4 +91,5 @@ func init() {
 	Register(new(obfs3.Transport))
 	Register(new(obfs4.Transport))
 	Register(new(scramblesuit.Transport))
+	Register(new(DustMinus.Transport))
 }
