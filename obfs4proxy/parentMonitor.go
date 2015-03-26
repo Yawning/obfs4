@@ -63,7 +63,7 @@ func parentMonitorPpidChange(ppid int) {
 	// exceptions (Slowlaris/Android), but the parent PID changes
 	// under those platforms as well.
 	//
-	// Naturally we lose if the parent has died by the when the
+	// Naturally we lose if the parent has died by the time when the
 	// Getppid() call was issued in our parent, but, this is better
 	// than nothing.
 
