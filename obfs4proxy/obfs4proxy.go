@@ -386,6 +386,9 @@ func getVersion() string {
 }
 
 func main() {
+	// Initialize parent process monitoring as early as possible.
+	pmonErr := initParentMonitor()
+
 	// Handle the command line arguments.
 	_, execName := path.Split(os.Args[0])
 	showVer := flag.Bool("version", false, "Print version and exit")
@@ -418,6 +421,9 @@ func main() {
 		log.Fatalf("[ERROR]: %s - failed to initialize logging", execName)
 	} else {
 		noticef("%s - launched", getVersion())
+		if pmonErr != nil {
+			warnf("%s - failed to initialize parent monitor: %s", execName, pmonErr)
+		}
 	}
 	if isClient {
 		infof("%s - initializing client transport listeners", execName)
