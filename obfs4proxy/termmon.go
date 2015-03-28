@@ -28,6 +28,8 @@
 package main
 
 import (
+	"io"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"runtime"
@@ -68,6 +70,17 @@ func (m *termMonitor) wait(termOnNoHandlers bool) os.Signal {
 	}
 }
 
+func (m *termMonitor) termOnStdinClose() {
+	_, err := io.Copy(ioutil.Discard, os.Stdin)
+
+	// io.Copy() will return a nil on EOF, since reaching EOF is
+	// expected behavior.  No matter what, if this unblocks, assume
+	// that stdin is closed, and treat that as having received a
+	// SIGTERM.
+	noticef("Stdin is closed or unreadable: %v", err)
+	m.sigChan <- syscall.SIGTERM
+}
+
 func (m *termMonitor) termOnPPIDChange(ppid int) {
 	// Under most if not all U*IX systems, the parent PID will change
 	// to that of init once the parent dies.  There are several notable
@@ -77,7 +90,6 @@ func (m *termMonitor) termOnPPIDChange(ppid int) {
 	// Naturally we lose if the parent has died by the time when the
 	// Getppid() call was issued in our parent, but, this is better
 	// than nothing.
-
 	const ppidPollInterval = 1 * time.Second
 	for ppid == os.Getppid() {
 		time.Sleep(ppidPollInterval)
@@ -89,31 +101,33 @@ func (m *termMonitor) termOnPPIDChange(ppid int) {
 	m.sigChan <- syscall.SIGTERM
 }
 
-func newTermMonitor() *termMonitor {
+func newTermMonitor() (m *termMonitor) {
 	ppid := os.Getppid()
-	m := new(termMonitor)
+	m = new(termMonitor)
 	m.sigChan = make(chan os.Signal)
 	m.handlerChan = make(chan int)
 	signal.Notify(m.sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Until #15435 is implemented, there is no reliable way to see if
-	// the parent has died that is portable/platform independent/reliable.
-	//
-	// Do the next best thing and use various kludges and hacks:
-	//  * Linux - Platform specific code that should always work.
-	//  * Other U*IX - Somewhat generic code, that works unless the parent
-	//    dies before the monitor is initialized.
-	//  * Windows - Don't specifically monitor for parent termination.
-	if termMonitorOSInit != nil {
-		// Errors here are non-fatal, since it might still be possible
-		// to fall back to a generic implementation.
-		if err := termMonitorOSInit(m); err == nil {
-			return m
+	// If tor supports feature #15435, we can use Stdin being closed as an
+	// indication that tor has died, or wants the PT to shutdown for any
+	// reason.
+	if ptShouldExitOnStdinClose() {
+		go m.termOnStdinClose()
+	} else {
+		// Instead of feature #15435, use various kludges and hacks:
+		//  * Linux - Platform specific code that should always work.
+		//  * Other U*IX - Somewhat generic code, that works unless the
+		//    parent dies before the monitor is initialized.
+		if termMonitorOSInit != nil {
+			// Errors here are non-fatal, since it might still be
+			// possible to fall back to a generic implementation.
+			if err := termMonitorOSInit(m); err == nil {
+				return
+			}
+		}
+		if runtime.GOOS != "windows" {
+			go m.termOnPPIDChange(ppid)
 		}
 	}
-	if runtime.GOOS != "windows" {
-		go m.termOnPPIDChange(ppid)
-	}
-
-	return m
+	return
 }
