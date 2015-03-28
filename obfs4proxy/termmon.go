@@ -28,36 +28,47 @@
 package main
 
 import (
-	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"syscall"
 	"time"
 )
 
-var parentMonitorOSInit func() error
+var termMonitorOSInit func(*termMonitor) error
 
-func initParentMonitor() error {
-	// Until #15435 is implemented, there is no reliable way to see if
-	// the parent has died that is portable/platform independent/reliable.
-	//
-	// Do the next best thing and use various kludges and hacks:
-	//  * Linux - Platform specific code that should always work.
-	//  * Other U*IX - Somewhat generic code, that works unless the parent
-	//    dies before the monitor is initialized.
-	//  * Windows - Log an error, can't be bothered to figure out how
-	//    to handle this there.
-	if parentMonitorOSInit != nil {
-		return parentMonitorOSInit()
-	} else if runtime.GOOS != "windows" {
-		ppid := os.Getppid()
-		go parentMonitorPpidChange(ppid)
-		return nil
-	}
-	return fmt.Errorf("unsupported on: %s", runtime.GOOS)
+type termMonitor struct {
+	sigChan     chan os.Signal
+	handlerChan chan int
+	numHandlers int
 }
 
-func parentMonitorPpidChange(ppid int) {
+func (m *termMonitor) onHandlerStart() {
+	m.handlerChan <- 1
+}
+
+func (m *termMonitor) onHandlerFinish() {
+	m.handlerChan <- -1
+}
+
+func (m *termMonitor) wait(termOnNoHandlers bool) os.Signal {
+	// Block until a signal has been received, or (optionally) the
+	// number of pending handlers has hit 0.  In the case of the
+	// latter, treat it as if a SIGTERM has been received.
+	for {
+		select {
+		case n := <-m.handlerChan:
+			m.numHandlers += n
+		case sig := <-m.sigChan:
+			return sig
+		}
+		if termOnNoHandlers && m.numHandlers == 0 {
+			return syscall.SIGTERM
+		}
+	}
+}
+
+func (m *termMonitor) termOnPPIDChange(ppid int) {
 	// Under most if not all U*IX systems, the parent PID will change
 	// to that of init once the parent dies.  There are several notable
 	// exceptions (Slowlaris/Android), but the parent PID changes
@@ -72,17 +83,37 @@ func parentMonitorPpidChange(ppid int) {
 		time.Sleep(ppidPollInterval)
 	}
 
-	// If possible SIGTERM ourself so that the normal shutdown code
-	// gets invoked.  If any of that fails, exit anyway, we are a
-	// defunt process.
+	// Treat the parent PID changing as the same as having received
+	// a SIGTERM.
 	noticef("Parent pid changed: %d (was %d)", os.Getppid(), ppid)
-	if p, err := os.FindProcess(os.Getpid()); err == nil {
-		if err := p.Signal(syscall.SIGTERM); err == nil {
-			return
+	m.sigChan <- syscall.SIGTERM
+}
+
+func newTermMonitor() *termMonitor {
+	ppid := os.Getppid()
+	m := new(termMonitor)
+	m.sigChan = make(chan os.Signal)
+	m.handlerChan = make(chan int)
+	signal.Notify(m.sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Until #15435 is implemented, there is no reliable way to see if
+	// the parent has died that is portable/platform independent/reliable.
+	//
+	// Do the next best thing and use various kludges and hacks:
+	//  * Linux - Platform specific code that should always work.
+	//  * Other U*IX - Somewhat generic code, that works unless the parent
+	//    dies before the monitor is initialized.
+	//  * Windows - Don't specifically monitor for parent termination.
+	if termMonitorOSInit != nil {
+		// Errors here are non-fatal, since it might still be possible
+		// to fall back to a generic implementation.
+		if err := termMonitorOSInit(m); err == nil {
+			return m
 		}
-		warnf("Failed to SIGTERM ourself: %v", err)
-	} else {
-		warnf("Failed to find our own process: %v", err)
 	}
-	os.Exit(-1)
+	if runtime.GOOS != "windows" {
+		go m.termOnPPIDChange(ppid)
+	}
+
+	return m
 }

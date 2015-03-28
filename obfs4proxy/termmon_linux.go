@@ -32,7 +32,7 @@ import (
 	"syscall"
 )
 
-func parentMonitorInitLinux() error {
+func termMonitorInitLinux(m *termMonitor) error {
 	// Use prctl() to have the kernel deliver a SIGTERM if the parent
 	// process dies.  This beats anything else that can be done before
 	// #15435 is implemented.
@@ -45,5 +45,5 @@ func parentMonitorInitLinux() error {
 }
 
 func init() {
-	parentMonitorOSInit = parentMonitorInitLinux
+	termMonitorOSInit = termMonitorInitLinux
 }
