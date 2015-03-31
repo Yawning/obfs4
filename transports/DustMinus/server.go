@@ -61,6 +61,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 
 	// Force this for the "minus" transport.
 	private.EndpointParams.Shaping.IgnoreDuration = true
+	private.EndpointParams.Crypting.HoldIncoming = true
 
 	return &serverFactory{
 		transport: t,

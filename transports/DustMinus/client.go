@@ -44,6 +44,7 @@ func (cf *clientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 
 	// Force this for the "minus" transport.
 	public.EndpointParams.Shaping.IgnoreDuration = true
+	public.EndpointParams.Crypting.HoldIncoming = true
 
 	return clientArgs(public), nil
 }
