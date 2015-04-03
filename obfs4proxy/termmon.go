@@ -35,6 +35,8 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"git.torproject.org/pluggable-transports/obfs4.git/common/log"
 )
 
 var termMonitorOSInit func(*termMonitor) error
@@ -77,7 +79,7 @@ func (m *termMonitor) termOnStdinClose() {
 	// expected behavior.  No matter what, if this unblocks, assume
 	// that stdin is closed, and treat that as having received a
 	// SIGTERM.
-	noticef("Stdin is closed or unreadable: %v", err)
+	log.Noticef("Stdin is closed or unreadable: %v", err)
 	m.sigChan <- syscall.SIGTERM
 }
 
@@ -97,7 +99,7 @@ func (m *termMonitor) termOnPPIDChange(ppid int) {
 
 	// Treat the parent PID changing as the same as having received
 	// a SIGTERM.
-	noticef("Parent pid changed: %d (was %d)", os.Getppid(), ppid)
+	log.Noticef("Parent pid changed: %d (was %d)", os.Getppid(), ppid)
 	m.sigChan <- syscall.SIGTERM
 }
 

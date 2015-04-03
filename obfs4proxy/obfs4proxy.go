@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Yawning Angel <yawning at torproject dot org>
+ * Copyright (c) 2014-2015, Yawning Angel <yawning at torproject dot org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,8 +33,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
+	golog "log"
 	"net"
 	"net/url"
 	"os"
@@ -45,6 +44,7 @@ import (
 	"golang.org/x/net/proxy"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
+	"git.torproject.org/pluggable-transports/obfs4.git/common/log"
 	"git.torproject.org/pluggable-transports/obfs4.git/transports"
 	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
 )
@@ -53,11 +53,8 @@ const (
 	obfs4proxyVersion = "0.0.4"
 	obfs4proxyLogFile = "obfs4proxy.log"
 	socksAddr         = "127.0.0.1:0"
-	elidedAddr        = "[scrubbed]"
 )
 
-var enableLogging bool
-var unsafeLogging bool
 var stateDir string
 var termMon *termMonitor
 
@@ -65,63 +62,15 @@ var termMon *termMonitor
 // interface.
 type DialFn func(string, string) (net.Conn, error)
 
-func elideAddr(addrStr string) string {
-	if unsafeLogging {
-		return addrStr
-	}
-
-	if addr, err := resolveAddrStr(addrStr); err == nil {
-		// Only scrub off the address so that it's slightly easier to follow
-		// the logs by looking at the port.
-		return fmt.Sprintf("%s:%d", elidedAddr, addr.Port)
-	}
-
-	return elidedAddr
-}
-
-func elideError(err error) string {
-	// Go's net package is somewhat rude and includes IP address and port
-	// information in the string representation of net.Errors.  Figure out if
-	// this is the case here, and sanitize the error messages as needed.
-	if unsafeLogging {
-		return err.Error()
-	}
-
-	// If err is not a net.Error, just return the string representation,
-	// presumably transport authors know what they are doing.
-	netErr, ok := err.(net.Error)
-	if !ok {
-		return err.Error()
-	}
-
-	switch t := netErr.(type) {
-	case *net.AddrError:
-		return t.Err + " " + elidedAddr
-	case *net.DNSError:
-		return "lookup " + elidedAddr + " on " + elidedAddr + ": " + t.Err
-	case *net.InvalidAddrError:
-		return "invalid address error"
-	case *net.UnknownNetworkError:
-		return "unknown network " + elidedAddr
-	case *net.OpError:
-		return t.Op + ": " + t.Err.Error()
-	default:
-		// For unknown error types, do the conservative thing and only log the
-		// type of the error instead of assuming that the string representation
-		// does not contain sensitive information.
-		return fmt.Sprintf("network error: <%T>", t)
-	}
-}
-
 func clientSetup() (launched bool, listeners []net.Listener) {
 	ptClientInfo, err := pt.ClientSetup(transports.Transports())
 	if err != nil {
-		log.Fatal(err)
+		golog.Fatal(err)
 	}
 
 	ptClientProxy, err := ptGetProxy()
 	if err != nil {
-		log.Fatal(err)
+		golog.Fatal(err)
 	} else if ptClientProxy != nil {
 		ptProxyDone()
 	}
@@ -149,7 +98,7 @@ func clientSetup() (launched bool, listeners []net.Listener) {
 		go clientAcceptLoop(f, ln, ptClientProxy)
 		pt.Cmethod(name, ln.Version(), ln.Addr())
 
-		infof("%s - registered listener: %s", name, ln.Addr())
+		log.Infof("%s - registered listener: %s", name, ln.Addr())
 
 		listeners = append(listeners, ln)
 		launched = true
@@ -179,13 +128,13 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	defer termMon.onHandlerFinish()
 
 	name := f.Transport().Name()
-	addrStr := elideAddr(conn.Req.Target)
-	infof("%s(%s) - new connection", name, addrStr)
+	addrStr := log.ElideAddr(conn.Req.Target)
+	log.Infof("%s(%s) - new connection", name, addrStr)
 
 	// Deal with arguments.
 	args, err := f.ParseArgs(&conn.Req.Args)
 	if err != nil {
-		errorf("%s(%s) - invalid arguments: %s", name, addrStr, err)
+		log.Errorf("%s(%s) - invalid arguments: %s", name, addrStr, err)
 		conn.Reject()
 		return
 	}
@@ -199,7 +148,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 		// the configuration phase.
 		dialer, err := proxy.FromURL(proxyURI, proxy.Direct)
 		if err != nil {
-			errorf("%s(%s) - failed to obtain proxy dialer: %s", name, addrStr, elideError(err))
+			log.Errorf("%s(%s) - failed to obtain proxy dialer: %s", name, addrStr, log.ElideError(err))
 			conn.Reject()
 			return
 		}
@@ -207,7 +156,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	}
 	remoteConn, err := dialFn("tcp", conn.Req.Target) // XXX: Allow UDP?
 	if err != nil {
-		errorf("%s(%s) - outgoing connection failed: %s", name, addrStr, elideError(err))
+		log.Errorf("%s(%s) - outgoing connection failed: %s", name, addrStr, log.ElideError(err))
 		conn.Reject()
 		return
 	}
@@ -217,20 +166,20 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 	// bytes back and forth.
 	remote, err := f.WrapConn(remoteConn, args)
 	if err != nil {
-		errorf("%s(%s) - handshake failed: %s", name, addrStr, elideError(err))
+		log.Errorf("%s(%s) - handshake failed: %s", name, addrStr, log.ElideError(err))
 		conn.Reject()
 		return
 	}
 	err = conn.Grant(remoteConn.RemoteAddr().(*net.TCPAddr))
 	if err != nil {
-		errorf("%s(%s) - SOCKS grant failed: %s", name, addrStr, elideError(err))
+		log.Errorf("%s(%s) - SOCKS grant failed: %s", name, addrStr, log.ElideError(err))
 		return
 	}
 
 	if err = copyLoop(conn, remote); err != nil {
-		warnf("%s(%s) - closed connection: %s", name, addrStr, elideError(err))
+		log.Warnf("%s(%s) - closed connection: %s", name, addrStr, log.ElideError(err))
 	} else {
-		infof("%s(%s) - closed connection", name, addrStr)
+		log.Infof("%s(%s) - closed connection", name, addrStr)
 	}
 
 	return
@@ -239,7 +188,7 @@ func clientHandler(f base.ClientFactory, conn *pt.SocksConn, proxyURI *url.URL) 
 func serverSetup() (launched bool, listeners []net.Listener) {
 	ptServerInfo, err := pt.ServerSetup(transports.Transports())
 	if err != nil {
-		log.Fatal(err)
+		golog.Fatal(err)
 	}
 
 	for _, bindaddr := range ptServerInfo.Bindaddrs {
@@ -269,7 +218,7 @@ func serverSetup() (launched bool, listeners []net.Listener) {
 			pt.SmethodArgs(name, ln.Addr(), nil)
 		}
 
-		infof("%s - registered listener: %s", name, elideAddr(ln.Addr().String()))
+		log.Infof("%s - registered listener: %s", name, log.ElideAddr(ln.Addr().String()))
 
 		listeners = append(listeners, ln)
 		launched = true
@@ -299,28 +248,28 @@ func serverHandler(f base.ServerFactory, conn net.Conn, info *pt.ServerInfo) {
 	defer termMon.onHandlerFinish()
 
 	name := f.Transport().Name()
-	addrStr := elideAddr(conn.RemoteAddr().String())
-	infof("%s(%s) - new connection", name, addrStr)
+	addrStr := log.ElideAddr(conn.RemoteAddr().String())
+	log.Infof("%s(%s) - new connection", name, addrStr)
 
 	// Instantiate the server transport method and handshake.
 	remote, err := f.WrapConn(conn)
 	if err != nil {
-		warnf("%s(%s) - handshake failed: %s", name, addrStr, elideError(err))
+		log.Warnf("%s(%s) - handshake failed: %s", name, addrStr, log.ElideError(err))
 		return
 	}
 
 	// Connect to the orport.
 	orConn, err := pt.DialOr(info, conn.RemoteAddr().String(), name)
 	if err != nil {
-		errorf("%s(%s) - failed to connect to ORPort: %s", name, addrStr, elideError(err))
+		log.Errorf("%s(%s) - failed to connect to ORPort: %s", name, addrStr, log.ElideError(err))
 		return
 	}
 	defer orConn.Close()
 
 	if err = copyLoop(orConn, remote); err != nil {
-		warnf("%s(%s) - closed connection: %s", name, addrStr, elideError(err))
+		log.Warnf("%s(%s) - closed connection: %s", name, addrStr, log.ElideError(err))
 	} else {
-		infof("%s(%s) - closed connection", name, addrStr)
+		log.Infof("%s(%s) - closed connection", name, addrStr)
 	}
 
 	return
@@ -360,22 +309,6 @@ func copyLoop(a net.Conn, b net.Conn) error {
 	return nil
 }
 
-func ptInitializeLogging(enable bool) error {
-	if enable {
-		// While we could just exit, log an ENV-ERROR so it will propagate to
-		// the tor log.
-		f, err := os.OpenFile(path.Join(stateDir, obfs4proxyLogFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return ptEnvError(fmt.Sprintf("failed to open log file: %s\n", err))
-		}
-		log.SetOutput(f)
-	} else {
-		log.SetOutput(ioutil.Discard)
-	}
-
-	return nil
-}
-
 func getVersion() string {
 	return fmt.Sprintf("obfs4proxy-%s", obfs4proxyVersion)
 }
@@ -387,17 +320,17 @@ func main() {
 	// Handle the command line arguments.
 	_, execName := path.Split(os.Args[0])
 	showVer := flag.Bool("version", false, "Print version and exit")
-	logLevelStr := flag.String("logLevel", "ERROR", "Log level (ERROR/WARN/INFO)")
-	flag.BoolVar(&enableLogging, "enableLogging", false, "Log to TOR_PT_STATE_LOCATION/"+obfs4proxyLogFile)
-	flag.BoolVar(&unsafeLogging, "unsafeLogging", false, "Disable the address scrubber")
+	logLevelStr := flag.String("logLevel", "ERROR", "Log level (ERROR/WARN/INFO/DEBUG)")
+	enableLogging := flag.Bool("enableLogging", false, "Log to TOR_PT_STATE_LOCATION/"+obfs4proxyLogFile)
+	unsafeLogging := flag.Bool("unsafeLogging", false, "Disable the address scrubber")
 	flag.Parse()
 
 	if *showVer {
 		fmt.Printf("%s\n", getVersion())
 		os.Exit(0)
 	}
-	if err := setLogLevel(*logLevelStr); err != nil {
-		log.Fatalf("[ERROR]: failed to set log level: %s", err)
+	if err := log.SetLogLevel(*logLevelStr); err != nil {
+		golog.Fatalf("[ERROR]: %s - failed to set log level: %s", execName, err)
 	}
 
 	// Determine if this is a client or server, initialize the common state.
@@ -405,22 +338,23 @@ func main() {
 	launched := false
 	isClient, err := ptIsClient()
 	if err != nil {
-		log.Fatalf("[ERROR]: %s - must be run as a managed transport", execName)
+		golog.Fatalf("[ERROR]: %s - must be run as a managed transport", execName)
 	}
 	if stateDir, err = pt.MakeStateDir(); err != nil {
-		log.Fatalf("[ERROR]: %s - No state directory: %s", execName, err)
+		golog.Fatalf("[ERROR]: %s - No state directory: %s", execName, err)
 	}
-	if err = ptInitializeLogging(enableLogging); err != nil {
-		log.Fatalf("[ERROR]: %s - failed to initialize logging", execName)
+	if err = log.Init(*enableLogging, path.Join(stateDir, obfs4proxyLogFile), *unsafeLogging); err != nil {
+		golog.Fatalf("[ERROR]: %s - failed to initialize logging", execName)
 	}
-	noticef("%s - launched", getVersion())
+
+	log.Noticef("%s - launched", getVersion())
 
 	// Do the managed pluggable transport protocol configuration.
 	if isClient {
-		infof("%s - initializing client transport listeners", execName)
+		log.Infof("%s - initializing client transport listeners", execName)
 		launched, ptListeners = clientSetup()
 	} else {
-		infof("%s - initializing server transport listeners", execName)
+		log.Infof("%s - initializing server transport listeners", execName)
 		launched, ptListeners = serverSetup()
 	}
 	if !launched {
@@ -429,9 +363,9 @@ func main() {
 		os.Exit(-1)
 	}
 
-	infof("%s - accepting connections", execName)
+	log.Infof("%s - accepting connections", execName)
 	defer func() {
-		noticef("%s - terminated", execName)
+		log.Noticef("%s - terminated", execName)
 	}()
 
 	// At this point, the pt config protocol is finished, and incoming
