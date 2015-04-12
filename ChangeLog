@@ -6,6 +6,7 @@ Changes in version 0.0.5 - UNRELEASED:
  - Moved the leveled logging wrappers into common/log so they are usable
    in transport implementations.
  - Added a DEBUG log level.
+ - Use a bundled SOCKS 5 server instead of goptlib's SocksListener.
 
 Changes in version 0.0.4 - 2015-02-17
  - Improve the runtime performance of the obfs4 handshake tests.
