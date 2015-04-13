@@ -41,13 +41,20 @@ import (
 const (
 	elidedAddr = "[scrubbed]"
 
-	levelError = iota
-	levelWarn
-	levelInfo
-	levelDebug
+	// LevelError is the ERROR log level (NOTICE/ERROR).
+	LevelError = iota
+
+	// LevelWarn is the WARN log level,  (NOTICE/ERROR/WARN).
+	LevelWarn
+
+	// LevelInfo is the INFO log level, (NOTICE/ERROR/WARN/INFO).
+	LevelInfo
+
+	// LevelDebug is the DEBUG log level, (NOTICE/ERROR/WARN/INFO/DEBUG).
+	LevelDebug
 )
 
-var logLevel = levelInfo
+var logLevel = LevelInfo
 var enableLogging bool
 var unsafeLogging bool
 
@@ -66,18 +73,34 @@ func Init(enable bool, logFilePath string, unsafe bool) error {
 	return nil
 }
 
+// Enabled returns if logging is enabled.
+func Enabled() bool {
+	return enableLogging
+}
+
+// Unsafe returns if unsafe logging is allowed (the caller MAY skip eliding
+// addresses and other bits of sensitive information).
+func Unsafe() bool {
+	return unsafeLogging
+}
+
+// Level returns the current log level.
+func Level() int {
+	return logLevel
+}
+
 // SetLogLevel sets the log level to the value indicated by the given string
 // (case-insensitive).
 func SetLogLevel(logLevelStr string) error {
 	switch strings.ToUpper(logLevelStr) {
 	case "ERROR":
-		logLevel = levelError
+		logLevel = LevelError
 	case "WARN":
-		logLevel = levelWarn
+		logLevel = LevelWarn
 	case "INFO":
-		logLevel = levelInfo
+		logLevel = LevelInfo
 	case "DEBUG":
-		logLevel = levelDebug
+		logLevel = LevelDebug
 	default:
 		return fmt.Errorf("invalid log level '%s'", logLevelStr)
 	}
@@ -85,6 +108,7 @@ func SetLogLevel(logLevelStr string) error {
 }
 
 // Noticef logs the given format string/arguments at the NOTICE log level.
+// Unless logging is disabled, Noticef logs are always emitted.
 func Noticef(format string, a ...interface{}) {
 	if enableLogging {
 		msg := fmt.Sprintf(format, a...)
@@ -94,7 +118,7 @@ func Noticef(format string, a ...interface{}) {
 
 // Errorf logs the given format string/arguments at the ERROR log level.
 func Errorf(format string, a ...interface{}) {
-	if enableLogging && logLevel >= levelError {
+	if enableLogging && logLevel >= LevelError {
 		msg := fmt.Sprintf(format, a...)
 		log.Print("[ERROR]: " + msg)
 	}
@@ -102,7 +126,7 @@ func Errorf(format string, a ...interface{}) {
 
 // Warnf logs the given format string/arguments at the WARN log level.
 func Warnf(format string, a ...interface{}) {
-	if enableLogging && logLevel >= levelWarn {
+	if enableLogging && logLevel >= LevelWarn {
 		msg := fmt.Sprintf(format, a...)
 		log.Print("[WARN]: " + msg)
 	}
@@ -110,7 +134,7 @@ func Warnf(format string, a ...interface{}) {
 
 // Infof logs the given format string/arguments at the INFO log level.
 func Infof(format string, a ...interface{}) {
-	if enableLogging && logLevel >= levelInfo {
+	if enableLogging && logLevel >= LevelInfo {
 		msg := fmt.Sprintf(format, a...)
 		log.Print("[INFO]: " + msg)
 	}
@@ -118,7 +142,7 @@ func Infof(format string, a ...interface{}) {
 
 // Debugf logs the given format string/arguments at the INFO log level.
 func Debugf(format string, a ...interface{}) {
-	if enableLogging && logLevel >= levelDebug {
+	if enableLogging && logLevel >= LevelDebug {
 		msg := fmt.Sprintf(format, a...)
 		log.Print("[DEBUG]: " + msg)
 	}
