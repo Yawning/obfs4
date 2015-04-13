@@ -158,3 +158,9 @@ func resolveAddrStr(addrStr string) (*net.TCPAddr, error) {
 
 	return &net.TCPAddr{IP: ip, Port: int(port), Zone: ""}, nil
 }
+
+// Feature #15435 adds a new env var for determining if Tor keeps stdin
+// open for use in termination detection.
+func ptShouldExitOnStdinClose() bool {
+	return os.Getenv("TOR_PT_EXIT_ON_STDIN_CLOSE") == "1"
+}

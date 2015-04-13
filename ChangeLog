@@ -2,6 +2,10 @@ Changes in version 0.0.5 - UNRELEASED:
  - Go vet/fmt fixes, and misc. code cleanups.  Patches by mvdan.
  - Changed the go.net import path to the new location (golang.org/x/net).
  - Added limited support for detecting if the parent process crashes.
+ - Support for tor feature #15335 (stdin based termination notification).
+ - Moved the leveled logging wrappers into common/log so they are usable
+   in transport implementations.
+ - Added a DEBUG log level.
 
 Changes in version 0.0.4 - 2015-02-17
  - Improve the runtime performance of the obfs4 handshake tests.
