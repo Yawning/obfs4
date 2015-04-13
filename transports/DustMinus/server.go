@@ -36,6 +36,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 		// ID file exists.  Try to load it.
 		private, err = Dust.LoadServerPrivateFile(idPath)
 		if err != nil {
+			log.Error("loading identity file from %s: %s", idPath, err)
 			return nil, err
 		}
 
@@ -45,18 +46,25 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 		// ID file doesn't exist.  Try to write a new one.
 		ep, err := Dust.ParseEndpointParams(unparsed)
 		if err != nil {
+			log.Error("parsing endpoint parameters: %s", err)
 			return nil, err
 		}
 
 		private, err = Dust.NewServerPrivate(ep)
 		if err != nil {
+			log.Error("generating new identity: %s", err)
 			return nil, err
 		}
 
 		err = private.SavePrivateFile(idPath)
 		if err != nil {
+			log.Error("saving new identity to %s: %s", idPath, err)
 			return nil, err
 		}
+		
+	default:
+		log.Error("stat %s: %s", idPath, statErr)
+		return nil, statErr
 	}
 
 	// Force this for the "minus" transport.

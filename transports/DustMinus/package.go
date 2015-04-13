@@ -12,6 +12,8 @@ const (
 	transportName = "DustMinus"
 )
 
+var log = logging.MustGetLogger("DustMinus")
+
 type Transport struct{}
 var _ base.Transport = (*Transport)(nil)
 
@@ -33,6 +35,6 @@ func init() {
 	formatted := logging.NewBackendFormatter(backend, formatter)
 	leveled := logging.AddModuleLevel(formatted)
 	// TODO: actually pick up log level... ?!
-	leveled.SetLevel(logging.INFO, "")
+	leveled.SetLevel(logging.DEBUG, "")
 	logging.SetBackend(leveled)
 }
