@@ -1,4 +1,4 @@
-Changes in version 0.0.5 - UNRELEASED:
+Changes in version 0.0.5 - 2015-04-15:
  - Go vet/fmt fixes, and misc. code cleanups.  Patches by mvdan.
  - Changed the go.net import path to the new location (golang.org/x/net).
  - Added limited support for detecting if the parent process crashes.
