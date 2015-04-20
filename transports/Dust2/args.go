@@ -1,4 +1,4 @@
-package DustMinus
+package Dust2
 
 import (
 	"git.torproject.org/pluggable-transports/goptlib.git"

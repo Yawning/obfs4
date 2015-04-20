@@ -1,4 +1,4 @@
-package DustMinus
+package Dust2
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
-	"github.com/blanu/Dust/go/Dust"
+	"github.com/blanu/Dust/go/v2/interface"
 )
 
 type clientFactory struct {
@@ -15,7 +15,7 @@ type clientFactory struct {
 }
 
 var (
-	ErrMultipleValuesNotSupported = errors.New("transport/DustMinus: multiple values for key not supported")
+	ErrMultipleValuesNotSupported = errors.New("transport/Dust2: multiple values for key not supported")
 )
 
 func (t *Transport) ClientFactory(stateDir string) (base.ClientFactory, error) {
@@ -42,19 +42,15 @@ func (cf *clientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 		return nil, err
 	}
 
-	// Force this for the "minus" transport.
-	public.EndpointParams.Shaping.IgnoreDuration = true
-	public.EndpointParams.Crypting.HoldIncoming = true
-
 	return clientArgs(public), nil
 }
 
 func (cf *clientFactory) WrapConn(visible net.Conn, args interface{}) (net.Conn, error) {
 	public := (*Dust.ServerPublic)(args.(clientArgs))
-	rconn, err := Dust.BeginRawClient(visible, public, nil)
+	rconn, err := Dust.BeginRawStreamClient(visible, public)
 	if err != nil {
 		return nil, err
 	}
 
-	return &streamConn{rconn}, err
+	return rconn, err
 }

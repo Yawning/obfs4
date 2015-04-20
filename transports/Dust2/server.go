@@ -1,4 +1,4 @@
-package DustMinus
+package Dust2
 
 import (
 	"net"
@@ -7,11 +7,11 @@ import (
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
-	"github.com/blanu/Dust/go/Dust"
+	"github.com/blanu/Dust/go/v2/interface"
 )
 
 const (
-	idFilename = "DustMinus_id"
+	idFilename = "Dust2_id"
 )
 
 type serverFactory struct {
@@ -67,10 +67,6 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 		return nil, statErr
 	}
 
-	// Force this for the "minus" transport.
-	private.EndpointParams.Shaping.IgnoreDuration = true
-	private.EndpointParams.Crypting.HoldIncoming = true
-
 	return &serverFactory{
 		transport: t,
 		stateDir:  stateDir,
@@ -87,10 +83,10 @@ func (sf *serverFactory) Args() *pt.Args {
 }
 
 func (sf *serverFactory) WrapConn(visible net.Conn) (net.Conn, error) {
-	rconn, err := Dust.BeginRawServer(visible, sf.private, nil)
+	rconn, err := Dust.BeginRawStreamServer(visible, sf.private)
 	if err != nil {
 		return nil, err
 	}
 
-	return &streamConn{rconn}, nil
+	return rconn, nil
 }
