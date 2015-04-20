@@ -1,4 +1,4 @@
-Changes in version 0.0.5 - UNRELEASED:
+Changes in version 0.0.5 - 2015-04-15:
  - Go vet/fmt fixes, and misc. code cleanups.  Patches by mvdan.
  - Changed the go.net import path to the new location (golang.org/x/net).
  - Added limited support for detecting if the parent process crashes.
@@ -6,6 +6,7 @@ Changes in version 0.0.5 - UNRELEASED:
  - Moved the leveled logging wrappers into common/log so they are usable
    in transport implementations.
  - Added a DEBUG log level.
+ - Use a bundled SOCKS 5 server instead of goptlib's SocksListener.
 
 Changes in version 0.0.4 - 2015-02-17
  - Improve the runtime performance of the obfs4 handshake tests.
