@@ -19,6 +19,8 @@ var (
 )
 
 func (t *Transport) ClientFactory(stateDir string) (base.ClientFactory, error) {
+	// TODO: do this at the right time rather than kludging it
+	propagateLogLevel()
 	return &clientFactory{
 		transport: t,
 		stateDir:  stateDir,

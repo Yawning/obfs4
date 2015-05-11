@@ -57,12 +57,18 @@ func translateLevel(level int) logging.Level {
 	}
 }
 
+var theLeveled logging.LeveledBackend
+
 func init() {
 	backend := &obfs4logBackend{}
 	formatSpec := "%{module:s}: %{message}"
 	formatter := logging.MustStringFormatter(formatSpec)
 	formatted := logging.NewBackendFormatter(backend, formatter)
-	leveled := logging.AddModuleLevel(formatted)
-	leveled.SetLevel(translateLevel(obfs4log.Level()), "")
-	logging.SetBackend(leveled)
+	theLeveled = logging.AddModuleLevel(formatted)
+	logging.SetBackend(theLeveled)
 }
+
+func propagateLogLevel() {
+	theLeveled.SetLevel(translateLevel(obfs4log.Level()), "")
+}
+

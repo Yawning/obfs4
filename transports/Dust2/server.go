@@ -66,6 +66,9 @@ func writeNewIdentity(unparsed map[string]string, idPath string) (private *Dust.
 }
 
 func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFactory, error) {
+	// TODO: do this at the right time rather than kludging it
+	propagateLogLevel()
+
 	idPath := filepath.Join(stateDir, idFilename)
 
 	unparsed, err := inPtArgs(args)
