@@ -91,5 +91,8 @@ func init() {
 	Register(new(obfs3.Transport))
 	Register(new(obfs4.Transport))
 	Register(new(scramblesuit.Transport))
-	Register(new(Dust2.Transport))
+
+	for _, t := range Dust2.MakeTransports() {
+		Register(t)
+	}
 }

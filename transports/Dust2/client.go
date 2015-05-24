@@ -39,6 +39,8 @@ func (cf *clientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 		return nil, err
 	}
 
+	unparsed["m"] = cf.transport.modelName
+
 	public, err := Dust.ParseServerPublic(unparsed)
 	if err != nil {
 		return nil, err

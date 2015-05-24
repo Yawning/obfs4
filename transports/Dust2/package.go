@@ -1,6 +1,8 @@
 package Dust2
 
 import (
+	"github.com/blanu/Dust/go/v2/interface"
+
 	"github.com/op/go-logging"
 
 	obfs4log "git.torproject.org/pluggable-transports/obfs4.git/common/log"
@@ -8,16 +10,20 @@ import (
 )
 
 const (
-	transportName = "Dust2"
+	transportBaseName = "Dust2"
+	transportPrefix   = transportBaseName + "_"
 )
 
 var log = logging.MustGetLogger("transport/Dust2")
 
-type Transport struct{}
+type Transport struct {
+	modelName string
+}
+
 var _ base.Transport = (*Transport)(nil)
 
 func (t *Transport) Name() string {
-	return transportName
+	return transportPrefix + t.modelName
 }
 
 type obfs4logBackend struct{}
@@ -72,3 +78,11 @@ func propagateLogLevel() {
 	theLeveled.SetLevel(translateLevel(obfs4log.Level()), "")
 }
 
+func MakeTransports() []base.Transport {
+	modelNames := Dust.ModelsAvailable()
+	out := make([]base.Transport, len(modelNames))
+	for i, name := range modelNames {
+		out[i] = &Transport{name}
+	}
+	return out
+}

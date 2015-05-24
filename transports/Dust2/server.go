@@ -30,6 +30,8 @@ type lazyBridgeLine struct {
 
 func (lazy lazyBridgeLine) String() string {
 	unparsed := lazy.public.Unparse()
+	modelName := unparsed["m"]
+	delete(unparsed, "m")
 
 	// TODO: lock down spec so that values can't contain horizontal whitespace.  (They
 	// don't currently, but it should be documented.)
@@ -39,10 +41,12 @@ func (lazy lazyBridgeLine) String() string {
 	}
 	sort.Strings(parts)
 
-	return fmt.Sprintf("Bridge %s ADDRESS %s", transportName, strings.Join(parts, " "))
+	return fmt.Sprintf("Bridge %s%s ADDRESS %s", transportPrefix, modelName, strings.Join(parts, " "))
 }
 
-func writeNewIdentity(unparsed map[string]string, idPath string) (private *Dust.ServerPrivate, err error) {
+func (t *Transport) writeNewIdentity(unparsed map[string]string, idPath string) (private *Dust.ServerPrivate, err error) {
+	// TODO: this destroys unparsed, which is not the best.
+	unparsed["m"] = t.modelName
 	ep, err := Dust.ParseEndpointParams(unparsed)
 	if err != nil {
 		log.Error("parsing endpoint parameters: %s", err)
@@ -92,7 +96,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 
 	case statErr != nil && os.IsNotExist(statErr):
 		// ID file doesn't exist.  Try to write a new one.
-		private, err = writeNewIdentity(unparsed, idPath)
+		private, err = t.writeNewIdentity(unparsed, idPath)
 		if err != nil {
 			// We already logged the error in writeNewIdentity.
 			return nil, err
