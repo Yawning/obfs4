@@ -140,7 +140,7 @@ func Infof(format string, a ...interface{}) {
 	}
 }
 
-// Debugf logs the given format string/arguments at the INFO log level.
+// Debugf logs the given format string/arguments at the DEBUG log level.
 func Debugf(format string, a ...interface{}) {
 	if enableLogging && logLevel >= LevelDebug {
 		msg := fmt.Sprintf(format, a...)
