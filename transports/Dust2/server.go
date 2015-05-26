@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	idFilename = "Dust2_id"
+	idFilenamePattern = "Dust2_%s_id"
 )
 
 type serverFactory struct {
@@ -73,6 +73,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 	// TODO: do this at the right time rather than kludging it
 	propagateLogLevel()
 
+	idFilename := fmt.Sprintf(idFilenamePattern, t.modelName)
 	idPath := filepath.Join(stateDir, idFilename)
 
 	unparsed, err := inPtArgs(args)
@@ -93,6 +94,9 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 		}
 
 		// TODO: doesn't check ID file for congruence with existing parameters.
+		// Currently this doesn't matter because the models are set up as separate
+		// transports and no models have any model-specific parameters, but it might
+		// be problematic in the future.
 
 	case statErr != nil && os.IsNotExist(statErr):
 		// ID file doesn't exist.  Try to write a new one.
