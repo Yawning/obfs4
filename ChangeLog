@@ -1,4 +1,6 @@
 Changes in version 0.0.6 - UNRELEASED:
+ - Delay transport factory initialization till after logging has been
+   initialized.
 
 Changes in version 0.0.5 - 2015-04-15:
  - Go vet/fmt fixes, and misc. code cleanups.  Patches by mvdan.

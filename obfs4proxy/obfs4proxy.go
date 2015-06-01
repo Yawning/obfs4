@@ -347,6 +347,10 @@ func main() {
 	if err = log.Init(*enableLogging, path.Join(stateDir, obfs4proxyLogFile), *unsafeLogging); err != nil {
 		golog.Fatalf("[ERROR]: %s - failed to initialize logging", execName)
 	}
+	if err = transports.Init(); err != nil {
+		log.Errorf("%s - failed to initialize transports: %s", execName, err)
+		os.Exit(-1)
+	}
 
 	log.Noticef("%s - launched", getVersion())
 

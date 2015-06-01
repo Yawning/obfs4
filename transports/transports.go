@@ -41,7 +41,7 @@ import (
 )
 
 var transportMapLock sync.Mutex
-var transportMap map[string]base.Transport
+var transportMap map[string]base.Transport = make(map[string]base.Transport)
 
 // Register registers a transport protocol.
 func Register(transport base.Transport) error {
@@ -81,13 +81,12 @@ func Get(name string) base.Transport {
 	return t
 }
 
-func init() {
-	// Initialize the transport list.
-	transportMap = make(map[string]base.Transport)
-
-	// Register all the currently supported transports.
+// Init initializes all of the integrated transports.
+func Init() error {
 	Register(new(obfs2.Transport))
 	Register(new(obfs3.Transport))
 	Register(new(obfs4.Transport))
 	Register(new(scramblesuit.Transport))
+
+	return nil
 }
