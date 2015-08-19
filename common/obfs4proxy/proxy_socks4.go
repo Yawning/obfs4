@@ -31,7 +31,7 @@
  * license that can be found in the LICENSE file.
  */
 
-package main
+package obfs4proxy
 
 import (
 	"errors"
