@@ -1,6 +1,10 @@
 Changes in version 0.0.6 - UNRELEASED:
  - Delay transport factory initialization till after logging has been
    initialized.
+ - Add a meek client implementation (WARNING: Does not support using a
+   helper to normalize TLS signatures).  The brave people that want to use
+   it can do so as the "meek_lite" transport, with identical bridge lines
+   to the real meek-client.
 
 Changes in version 0.0.5 - 2015-04-15:
  - Go vet/fmt fixes, and misc. code cleanups.  Patches by mvdan.
