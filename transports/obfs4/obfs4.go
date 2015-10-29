@@ -204,13 +204,21 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 	return &obfs4ClientArgs{nodeID, publicKey, sessionKey, iatMode}, nil
 }
 
-func (cf *obfs4ClientFactory) WrapConn(conn net.Conn, args interface{}) (net.Conn, error) {
+func (cf *obfs4ClientFactory) Dial(network, addr string, dialFn base.DialFunc, args interface{}) (net.Conn, error) {
+	// Validate args before bothering to open connection.
 	ca, ok := args.(*obfs4ClientArgs)
 	if !ok {
 		return nil, fmt.Errorf("invalid argument type for args")
 	}
-
-	return newObfs4ClientConn(conn, ca)
+	conn, err := dialFn(network, addr)
+	if err != nil {
+		return nil, err
+	}
+	if conn, err = newObfs4ClientConn(conn, ca); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 type obfs4ServerFactory struct {

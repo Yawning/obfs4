@@ -155,22 +155,13 @@ func clientHandler(f base.ClientFactory, conn net.Conn, proxyURI *url.URL) {
 		}
 		dialFn = dialer.Dial
 	}
-	remoteConn, err := dialFn("tcp", socksReq.Target) // XXX: Allow UDP?
+	remote, err := f.Dial("tcp", socksReq.Target, dialFn, args)
 	if err != nil {
 		log.Errorf("%s(%s) - outgoing connection failed: %s", name, addrStr, log.ElideError(err))
 		socksReq.Reply(socks5.ErrorToReplyCode(err))
 		return
 	}
-	defer remoteConn.Close()
-
-	// Instantiate the client transport method, handshake, and start pushing
-	// bytes back and forth.
-	remote, err := f.WrapConn(remoteConn, args)
-	if err != nil {
-		log.Errorf("%s(%s) - handshake failed: %s", name, addrStr, log.ElideError(err))
-		socksReq.Reply(socks5.ReplyGeneralFailure)
-		return
-	}
+	defer remote.Close()
 	err = socksReq.Reply(socks5.ReplySucceeded)
 	if err != nil {
 		log.Errorf("%s(%s) - SOCKS reply failed: %s", name, addrStr, log.ElideError(err))

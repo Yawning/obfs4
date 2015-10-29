@@ -76,12 +76,22 @@ func (cf *ssClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 	return newClientArgs(args)
 }
 
-func (cf *ssClientFactory) WrapConn(conn net.Conn, args interface{}) (net.Conn, error) {
+func (cf *ssClientFactory) Dial(network, addr string, dialFn base.DialFunc, args interface{}) (net.Conn, error) {
+	// Validate args before opening outgoing connection.
 	ca, ok := args.(*ssClientArgs)
 	if !ok {
 		return nil, fmt.Errorf("invalid argument type for args")
 	}
-	return newScrambleSuitClientConn(conn, cf.ticketStore, ca)
+
+	conn, err := dialFn(network, addr)
+	if err != nil {
+		return nil, err
+	}
+	if conn, err = newScrambleSuitClientConn(conn, cf.ticketStore, ca); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 var _ base.ClientFactory = (*ssClientFactory)(nil)
