@@ -239,6 +239,7 @@ func (c *meekConn) roundTrip(sndBuf []byte) (recvBuf []byte, err error) {
 			req.Host = host
 		}
 		req.Header.Set("X-Session-Id", c.sessionID)
+		req.Header.Set("User-Agent", "")
 
 		resp, err = c.transport.RoundTrip(req)
 		if err != nil {
