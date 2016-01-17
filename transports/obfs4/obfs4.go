@@ -214,8 +214,9 @@ func (cf *obfs4ClientFactory) Dial(network, addr string, dialFn base.DialFunc, a
 	if err != nil {
 		return nil, err
 	}
+	dialConn := conn
 	if conn, err = newObfs4ClientConn(conn, ca); err != nil {
-		conn.Close()
+		dialConn.Close()
 		return nil, err
 	}
 	return conn, nil
