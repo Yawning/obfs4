@@ -87,8 +87,9 @@ func (cf *ssClientFactory) Dial(network, addr string, dialFn base.DialFunc, args
 	if err != nil {
 		return nil, err
 	}
+	dialConn := conn
 	if conn, err = newScrambleSuitClientConn(conn, cf.ticketStore, ca); err != nil {
-		conn.Close()
+		dialConn.Close()
 		return nil, err
 	}
 	return conn, nil

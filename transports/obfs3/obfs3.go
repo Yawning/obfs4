@@ -97,8 +97,9 @@ func (cf *obfs3ClientFactory) Dial(network, addr string, dialFn base.DialFunc, a
 	if err != nil {
 		return nil, err
 	}
+	dialConn := conn
 	if conn, err = newObfs3ClientConn(conn); err != nil {
-		conn.Close()
+		dialConn.Close()
 		return nil, err
 	}
 	return conn, nil
