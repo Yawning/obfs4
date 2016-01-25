@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	obfs4proxyVersion = "0.0.6-dev"
+	obfs4proxyVersion = "0.0.6"
 	obfs4proxyLogFile = "obfs4proxy.log"
 	socksAddr         = "127.0.0.1:0"
 )

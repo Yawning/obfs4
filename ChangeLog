@@ -1,4 +1,4 @@
-Changes in version 0.0.6 - UNRELEASED:
+Changes in version 0.0.6 - 2016-01-25:
  - Delay transport factory initialization till after logging has been
    initialized.
  - Add a meek client implementation (WARNING: Does not support using a
