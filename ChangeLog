@@ -1,3 +1,5 @@
+Changes in version 0.0.7 - UNRELEASED:
+
 Changes in version 0.0.6 - 2016-01-25:
  - Delay transport factory initialization till after logging has been
    initialized.
