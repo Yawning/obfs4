@@ -36,7 +36,7 @@ listed for clarity.
    important parts of the runtime library like a SHA256 implementation.
  * go.crypto (https://golang.org/x/crypto)
  * go.net (https://golang.org/x/net)
- * ed25519/extra25519 (https://github.com/agl/ed25519/extra25519)
+ * ed25519/extra25519 (https://github.com/agl/ed25519/tree/master/extra25519)
  * SipHash-2-4 (https://github.com/dchest/siphash)
  * goptlib (https://git.torproject.org/pluggable-transports/goptlib.git)
 
