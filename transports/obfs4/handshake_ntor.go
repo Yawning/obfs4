@@ -356,8 +356,7 @@ func (hs *serverHandshake) generateHandshake() ([]byte, error) {
 	// Calculate and write the MAC.
 	hs.mac.Reset()
 	hs.mac.Write(buf.Bytes())
-	hs.epochHour = []byte(strconv.FormatInt(getEpochHour(), 10))
-	hs.mac.Write(hs.epochHour)
+	hs.mac.Write(hs.epochHour) // Set in hs.parseClientHandshake()
 	buf.Write(hs.mac.Sum(nil)[:macLength])
 
 	return buf.Bytes(), nil
