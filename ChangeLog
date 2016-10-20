@@ -4,6 +4,8 @@ Changes in version 0.0.7 - UNRELEASED:
    to the state file.
  - Correctly use the derived epoch hour when generating the server obfs4
    ntor handshake response to be more tollerant of clock skew.
+ - Reuse the read buffer when consuming obfs4 frames over the network to
+   reduce memory consumption.  Patch by oxtoacart.
 
 Changes in version 0.0.6 - 2016-01-25:
  - Delay transport factory initialization till after logging has been
