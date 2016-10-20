@@ -265,7 +265,7 @@ func (sf *obfs4ServerFactory) WrapConn(conn net.Conn) (net.Conn, error) {
 		iatDist = probdist.New(sf.iatSeed, 0, maxIATDelay, biasedDist)
 	}
 
-	c := &obfs4Conn{conn, true, lenDist, iatDist, sf.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), nil, nil}
+	c := &obfs4Conn{conn, true, lenDist, iatDist, sf.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), make([]byte, consumeReadSize), nil, nil}
 
 	startTime := time.Now()
 
@@ -288,6 +288,7 @@ type obfs4Conn struct {
 
 	receiveBuffer        *bytes.Buffer
 	receiveDecodedBuffer *bytes.Buffer
+	readBuffer           []byte
 
 	encoder *framing.Encoder
 	decoder *framing.Decoder
@@ -311,7 +312,7 @@ func newObfs4ClientConn(conn net.Conn, args *obfs4ClientArgs) (c *obfs4Conn, err
 	}
 
 	// Allocate the client structure.
-	c = &obfs4Conn{conn, false, lenDist, iatDist, args.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), nil, nil}
+	c = &obfs4Conn{conn, false, lenDist, iatDist, args.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), make([]byte, consumeReadSize), nil, nil}
 
 	// Start the handshake timeout.
 	deadline := time.Now().Add(clientHandshakeTimeout)
