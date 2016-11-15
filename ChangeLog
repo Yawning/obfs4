@@ -1,4 +1,4 @@
-Changes in version 0.0.7 - UNRELEASED:
+Changes in version 0.0.7 - 2016-11-15:
  - Support configuring the obfs4 IAT parameter as the sole
    ServerTransportOption on bridges, and correctly checkpoint the argument
    to the state file.
