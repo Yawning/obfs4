@@ -29,6 +29,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
@@ -90,7 +91,9 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	}
 	req.Close = false
 	if s.haveAuth {
-		req.SetBasicAuth(s.username, s.password)
+		// SetBasicAuth doesn't quite do what is appropriate, because
+		// the correct header is `Proxy-Authorization`.
+		req.Header.Set("Proxy-Authorization", base64.StdEncoding.EncodeToString([]byte(s.username + ":" + s.password)))
 	}
 	req.Header.Set("User-Agent", "")
 
