@@ -1,5 +1,7 @@
 Changes in version 0.0.8 - UNRELEASED:
  - Bug 24793: Send the correct authorization HTTP header for basic auth.
+ - (meek_lite) Explicitly set Content-Length to zero when there is no data
+   to send.
 
 Changes in version 0.0.7 - 2016-11-15:
  - Support configuring the obfs4 IAT parameter as the sole

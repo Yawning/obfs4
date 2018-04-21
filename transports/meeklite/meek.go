@@ -231,7 +231,11 @@ func (c *meekConn) roundTrip(sndBuf []byte) (recvBuf []byte, err error) {
 		if c.args.front != "" {
 			url.Host = c.args.front
 		}
-		req, err = http.NewRequest("POST", url.String(), bytes.NewReader(sndBuf))
+		var body io.Reader
+		if len(sndBuf) > 0 {
+			body = bytes.NewReader(sndBuf)
+		}
+		req, err = http.NewRequest("POST", url.String(), body)
 		if err != nil {
 			return nil, err
 		}
