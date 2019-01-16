@@ -27,18 +27,18 @@
 
 // Package transports provides a interface to query supported pluggable
 // transports.
-package transports
+package transports // import "gitlab.com/yawning/obfs4.git/transports"
 
 import (
 	"fmt"
 	"sync"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/meeklite"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs2"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs3"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs4"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/scramblesuit"
+	"gitlab.com/yawning/obfs4.git/transports/base"
+	"gitlab.com/yawning/obfs4.git/transports/meeklite"
+	"gitlab.com/yawning/obfs4.git/transports/obfs2"
+	"gitlab.com/yawning/obfs4.git/transports/obfs3"
+	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	"gitlab.com/yawning/obfs4.git/transports/scramblesuit"
 )
 
 var transportMapLock sync.Mutex

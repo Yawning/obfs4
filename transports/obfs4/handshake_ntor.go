@@ -38,10 +38,10 @@ import (
 	"strconv"
 	"time"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
-	"git.torproject.org/pluggable-transports/obfs4.git/common/ntor"
-	"git.torproject.org/pluggable-transports/obfs4.git/common/replayfilter"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/obfs4/framing"
+	"gitlab.com/yawning/obfs4.git/common/csrand"
+	"gitlab.com/yawning/obfs4.git/common/ntor"
+	"gitlab.com/yawning/obfs4.git/common/replayfilter"
+	"gitlab.com/yawning/obfs4.git/transports/obfs4/framing"
 )
 
 const (

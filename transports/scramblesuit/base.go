@@ -27,14 +27,14 @@
 
 // Package scramblesuit provides an implementation of the ScrambleSuit
 // obfuscation protocol.  The implementation is client only.
-package scramblesuit
+package scramblesuit // import "gitlab.com/yawning/obfs4.git/transports/scramblesuit"
 
 import (
 	"fmt"
 	"net"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
+	"gitlab.com/yawning/obfs4.git/transports/base"
 )
 
 const transportName = "scramblesuit"

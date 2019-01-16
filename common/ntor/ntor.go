@@ -32,7 +32,7 @@
 //
 // Before using this package, it is strongly recommended that the specification
 // is read and understood.
-package ntor
+package ntor // import "gitlab.com/yawning/obfs4.git/common/ntor"
 
 import (
 	"bytes"
@@ -43,12 +43,10 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/agl/ed25519/extra25519"
+	"gitlab.com/yawning/obfs4.git/common/csrand"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
-
-	"github.com/agl/ed25519/extra25519"
-
-	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
 )
 
 const (

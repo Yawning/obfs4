@@ -41,13 +41,12 @@ import (
 	"sync"
 	"syscall"
 
-	"golang.org/x/net/proxy"
-
 	"git.torproject.org/pluggable-transports/goptlib.git"
-	"git.torproject.org/pluggable-transports/obfs4.git/common/log"
-	"git.torproject.org/pluggable-transports/obfs4.git/common/socks5"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
+	"gitlab.com/yawning/obfs4.git/common/log"
+	"gitlab.com/yawning/obfs4.git/common/socks5"
+	"gitlab.com/yawning/obfs4.git/transports"
+	"gitlab.com/yawning/obfs4.git/transports/base"
+	"golang.org/x/net/proxy"
 )
 
 const (

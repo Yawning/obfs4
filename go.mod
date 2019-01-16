@@ -1,4 +1,4 @@
-module git.torproject.org/pluggable-transports/obfs4.git
+module gitlab.com/yawning/obfs4.git
 
 require (
 	git.torproject.org/pluggable-transports/goptlib.git v0.0.0-20180321061416-7d56ec4f381e

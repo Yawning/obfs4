@@ -27,7 +27,7 @@
 
 // Package base provides the common interface that each supported transport
 // protocol must implement.
-package base
+package base // import "gitlab.com/yawning/obfs4.git/transports/base"
 
 import (
 	"net"

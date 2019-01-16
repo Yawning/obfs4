@@ -31,7 +31,7 @@
 // Not all of the convinience routines are replicated, only those that are
 // immediately useful.  The Rand variable provides access to the full math/rand
 // API.
-package csrand
+package csrand // import "gitlab.com/yawning/obfs4.git/common/csrand"
 
 import (
 	cryptRand "crypto/rand"

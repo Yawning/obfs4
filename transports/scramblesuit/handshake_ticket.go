@@ -42,7 +42,7 @@ import (
 	"sync"
 	"time"
 
-	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
+	"gitlab.com/yawning/obfs4.git/common/csrand"
 )
 
 const (

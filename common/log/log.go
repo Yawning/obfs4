@@ -27,7 +27,7 @@
 
 // Package log implements a simple set of leveled logging wrappers around the
 // standard log package.
-package log
+package log // import "gitlab.com/yawning/obfs4.git/common/log"
 
 import (
 	"fmt"

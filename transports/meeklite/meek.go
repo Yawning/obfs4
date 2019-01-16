@@ -44,7 +44,7 @@ import (
 	"time"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
-	"git.torproject.org/pluggable-transports/obfs4.git/transports/base"
+	"gitlab.com/yawning/obfs4.git/transports/base"
 )
 
 const (

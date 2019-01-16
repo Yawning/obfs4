@@ -27,7 +27,7 @@
 
 // Package drbg implements a minimalistic DRBG based off SipHash-2-4 in OFB
 // mode.
-package drbg
+package drbg // import "gitlab.com/yawning/obfs4.git/common/drbg"
 
 import (
 	"encoding/binary"
@@ -36,8 +36,7 @@ import (
 	"hash"
 
 	"github.com/dchest/siphash"
-
-	"git.torproject.org/pluggable-transports/obfs4.git/common/csrand"
+	"gitlab.com/yawning/obfs4.git/common/csrand"
 )
 
 // Size is the length of the HashDrbg output.

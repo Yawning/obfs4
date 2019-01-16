@@ -3,6 +3,7 @@ Changes in version 0.0.8 - UNRELEASED:
  - (meek_lite) Explicitly set Content-Length to zero when there is no data
    to send.
  - Added optional support for building as a Go 1.11 module.  Patch by mvdan.
+ - Change the canonical upstream repo location to gitlab.
 
 Changes in version 0.0.7 - 2016-11-15:
  - Support configuring the obfs4 IAT parameter as the sole
