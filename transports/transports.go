@@ -84,11 +84,17 @@ func Get(name string) base.Transport {
 
 // Init initializes all of the integrated transports.
 func Init() error {
-	Register(new(meeklite.Transport))
-	Register(new(obfs2.Transport))
-	Register(new(obfs3.Transport))
-	Register(new(obfs4.Transport))
-	Register(new(scramblesuit.Transport))
+	for _, v := range []base.Transport{
+		new(meeklite.Transport),
+		new(obfs2.Transport),
+		new(obfs3.Transport),
+		new(obfs4.Transport),
+		new(scramblesuit.Transport),
+	} {
+		if err := Register(v); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

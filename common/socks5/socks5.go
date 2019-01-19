@@ -257,15 +257,15 @@ func (req *Request) readCommand() error {
 
 	var err error
 	if err = req.readByteVerify("version", version); err != nil {
-		req.Reply(ReplyGeneralFailure)
+		_ = req.Reply(ReplyGeneralFailure)
 		return err
 	}
 	if err = req.readByteVerify("command", cmdConnect); err != nil {
-		req.Reply(ReplyCommandNotSupported)
+		_ = req.Reply(ReplyCommandNotSupported)
 		return err
 	}
 	if err = req.readByteVerify("reserved", rsv); err != nil {
-		req.Reply(ReplyGeneralFailure)
+		_ = req.Reply(ReplyGeneralFailure)
 		return err
 	}
 
@@ -273,49 +273,49 @@ func (req *Request) readCommand() error {
 	var atyp byte
 	var host string
 	if atyp, err = req.readByte(); err != nil {
-		req.Reply(ReplyGeneralFailure)
+		_ = req.Reply(ReplyGeneralFailure)
 		return err
 	}
 	switch atyp {
 	case atypIPv4:
 		var addr []byte
 		if addr, err = req.readBytes(net.IPv4len); err != nil {
-			req.Reply(ReplyGeneralFailure)
+			_ = req.Reply(ReplyGeneralFailure)
 			return err
 		}
 		host = net.IPv4(addr[0], addr[1], addr[2], addr[3]).String()
 	case atypDomainName:
 		var alen byte
 		if alen, err = req.readByte(); err != nil {
-			req.Reply(ReplyGeneralFailure)
+			_ = req.Reply(ReplyGeneralFailure)
 			return err
 		}
 		if alen == 0 {
-			req.Reply(ReplyGeneralFailure)
+			_ = req.Reply(ReplyGeneralFailure)
 			return fmt.Errorf("domain name with 0 length")
 		}
 		var addr []byte
 		if addr, err = req.readBytes(int(alen)); err != nil {
-			req.Reply(ReplyGeneralFailure)
+			_ = req.Reply(ReplyGeneralFailure)
 			return err
 		}
 		host = string(addr)
 	case atypIPv6:
 		var rawAddr []byte
 		if rawAddr, err = req.readBytes(net.IPv6len); err != nil {
-			req.Reply(ReplyGeneralFailure)
+			_ = req.Reply(ReplyGeneralFailure)
 			return err
 		}
 		addr := make(net.IP, net.IPv6len)
 		copy(addr[:], rawAddr[:])
 		host = fmt.Sprintf("[%s]", addr.String())
 	default:
-		req.Reply(ReplyAddressNotSupported)
+		_ = req.Reply(ReplyAddressNotSupported)
 		return fmt.Errorf("unsupported address type 0x%02x", atyp)
 	}
 	var rawPort []byte
 	if rawPort, err = req.readBytes(2); err != nil {
-		req.Reply(ReplyGeneralFailure)
+		_ = req.Reply(ReplyGeneralFailure)
 		return err
 	}
 	port := int(rawPort[0])<<8 | int(rawPort[1])

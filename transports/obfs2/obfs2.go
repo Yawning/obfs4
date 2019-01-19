@@ -362,9 +362,9 @@ func mac(s, x []byte) []byte {
 	// H(x) is SHA256 of x.
 	// MAC(s, x) = H(s | x | s)
 	h := sha256.New()
-	h.Write(s)
-	h.Write(x)
-	h.Write(s)
+	_, _ = h.Write(s)
+	_, _ = h.Write(x)
+	_, _ = h.Write(s)
 	return h.Sum(nil)
 }
 

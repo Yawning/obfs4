@@ -106,7 +106,7 @@ func (s *ssTicketStore) storeTicket(addr net.Addr, rawT []byte) {
 	// are ignored because the handshake code will just use UniformDH if a
 	// ticket is not available.
 	s.store[addr.String()] = t
-	s.serialize()
+	_ = s.serialize()
 }
 
 func (s *ssTicketStore) getTicket(addr net.Addr) (*ssTicket, error) {
@@ -198,7 +198,7 @@ func (hs *ssTicketClientHandshake) generateHandshake() ([]byte, error) {
 	hs.mac.Reset()
 
 	// The client handshake is T | P | M | MAC(T | P | M | E)
-	hs.mac.Write(hs.ticket.ticket[:])
+	_, _ = hs.mac.Write(hs.ticket.ticket[:])
 	m := hs.mac.Sum(nil)[:macLength]
 	p, err := makePad(hs.padLen)
 	if err != nil {
@@ -212,9 +212,9 @@ func (hs *ssTicketClientHandshake) generateHandshake() ([]byte, error) {
 
 	// Calculate and write the MAC.
 	e := []byte(strconv.FormatInt(getEpochHour(), 10))
-	hs.mac.Write(p)
-	hs.mac.Write(m)
-	hs.mac.Write(e)
+	_, _ = hs.mac.Write(p)
+	_, _ = hs.mac.Write(m)
+	_, _ = hs.mac.Write(e)
 	buf.Write(hs.mac.Sum(nil)[:macLength])
 
 	hs.mac.Reset()

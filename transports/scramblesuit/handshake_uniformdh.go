@@ -76,7 +76,7 @@ func (hs *ssDHClientHandshake) generateHandshake() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	hs.mac.Write(x)
+	_, _ = hs.mac.Write(x)
 	mC := hs.mac.Sum(nil)[:macLength]
 	pC, err := makePad(hs.padLen)
 	if err != nil {
@@ -90,9 +90,9 @@ func (hs *ssDHClientHandshake) generateHandshake() ([]byte, error) {
 
 	// Calculate and write the MAC.
 	hs.epochHour = []byte(strconv.FormatInt(getEpochHour(), 10))
-	hs.mac.Write(pC)
-	hs.mac.Write(mC)
-	hs.mac.Write(hs.epochHour)
+	_, _ = hs.mac.Write(pC)
+	_, _ = hs.mac.Write(mC)
+	_, _ = hs.mac.Write(hs.epochHour)
 	buf.Write(hs.mac.Sum(nil)[:macLength])
 
 	return buf.Bytes(), nil
@@ -113,7 +113,7 @@ func (hs *ssDHClientHandshake) parseServerHandshake(resp []byte) (int, []byte, e
 			return 0, nil, err
 		}
 		hs.mac.Reset()
-		hs.mac.Write(y)
+		_, _ = hs.mac.Write(y)
 		hs.serverMark = hs.mac.Sum(nil)[:macLength]
 	}
 
@@ -136,8 +136,8 @@ func (hs *ssDHClientHandshake) parseServerHandshake(resp []byte) (int, []byte, e
 	pos += uniformdh.Size
 
 	// Validate the MAC.
-	hs.mac.Write(resp[uniformdh.Size : pos+macLength])
-	hs.mac.Write(hs.epochHour)
+	_, _ = hs.mac.Write(resp[uniformdh.Size : pos+macLength])
+	_, _ = hs.mac.Write(hs.epochHour)
 	macCmp := hs.mac.Sum(nil)[:macLength]
 	macRx := resp[pos+macLength : pos+2*macLength]
 	if !hmac.Equal(macCmp, macRx) {

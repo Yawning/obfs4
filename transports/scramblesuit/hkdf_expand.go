@@ -50,9 +50,9 @@ func hkdfExpand(hashFn func() hash.Hash, prk []byte, info []byte, l int) []byte 
 	ctr := byte(1)
 	for toAppend > 0 {
 		h.Reset()
-		h.Write(t)
-		h.Write(info)
-		h.Write([]byte{ctr})
+		_, _ = h.Write(t)
+		_, _ = h.Write(info)
+		_, _ = h.Write([]byte{ctr})
 		t = h.Sum(nil)
 		ctr++
 

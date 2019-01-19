@@ -139,7 +139,7 @@ func (drbg *HashDrbg) Seed(seed int64) {
 
 // NextBlock returns the next 8 byte DRBG block.
 func (drbg *HashDrbg) NextBlock() []byte {
-	drbg.sip.Write(drbg.ofb[:])
+	_, _ = drbg.sip.Write(drbg.ofb[:])
 	copy(drbg.ofb[:], drbg.sip.Sum(nil))
 
 	ret := make([]byte, Size)

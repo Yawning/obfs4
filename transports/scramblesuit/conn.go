@@ -245,7 +245,7 @@ func (conn *ssConn) makePacket(w io.Writer, pktType byte, data []byte, padLen in
 	// Encrypt the packet, and calculate the MAC.
 	conn.txCrypto.s.XORKeyStream(pkt, pkt)
 	conn.txCrypto.mac.Reset()
-	conn.txCrypto.mac.Write(pkt)
+	_, _ = conn.txCrypto.mac.Write(pkt)
 	mac := conn.txCrypto.mac.Sum(nil)[:macLength]
 
 	// Write out MAC | Packet.  Note that this does not go onto the network
@@ -273,7 +273,7 @@ func (conn *ssConn) readPackets() error {
 				break
 			}
 			mac := make([]byte, macLength)
-			conn.receiveBuffer.Read(mac)
+			_, _ = conn.receiveBuffer.Read(mac)
 			conn.receiveState.mac = mac
 		}
 
@@ -283,12 +283,12 @@ func (conn *ssConn) readPackets() error {
 				break
 			}
 			hdr := make([]byte, pktHdrLength)
-			conn.receiveBuffer.Read(hdr)
+			_, _ = conn.receiveBuffer.Read(hdr)
 
 			// Add the encrypted packet header to the HMAC instance, and then
 			// decrypt it so that the length of the packet can be determined.
 			conn.rxCrypto.mac.Reset()
-			conn.rxCrypto.mac.Write(hdr)
+			_, _ = conn.rxCrypto.mac.Write(hdr)
 			conn.rxCrypto.s.XORKeyStream(hdr, hdr)
 
 			// Store the plaintext packet header, and host byte order length
@@ -311,8 +311,8 @@ func (conn *ssConn) readPackets() error {
 				break
 			}
 			data = make([]byte, conn.receiveState.totalLen)
-			conn.receiveBuffer.Read(data)
-			conn.rxCrypto.mac.Write(data)
+			_, _ = conn.receiveBuffer.Read(data)
+			_, _ = conn.rxCrypto.mac.Write(data)
 			conn.rxCrypto.s.XORKeyStream(data, data)
 		}
 

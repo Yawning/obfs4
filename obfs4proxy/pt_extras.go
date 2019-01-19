@@ -43,19 +43,19 @@ import (
 
 func ptEnvError(msg string) error {
 	line := []byte(fmt.Sprintf("ENV-ERROR %s\n", msg))
-	pt.Stdout.Write(line)
+	_, _ = pt.Stdout.Write(line)
 	return errors.New(msg)
 }
 
 func ptProxyError(msg string) error {
 	line := []byte(fmt.Sprintf("PROXY-ERROR %s\n", msg))
-	pt.Stdout.Write(line)
+	_, _ = pt.Stdout.Write(line)
 	return errors.New(msg)
 }
 
 func ptProxyDone() {
 	line := []byte("PROXY DONE\n")
-	pt.Stdout.Write(line)
+	_, _ = pt.Stdout.Write(line)
 }
 
 func ptIsClient() (bool, error) {

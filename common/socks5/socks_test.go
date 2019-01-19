@@ -56,12 +56,16 @@ func (c *testReadWriter) Write(buf []byte) (n int, err error) {
 	return c.writeBuf.Write(buf)
 }
 
-func (c *testReadWriter) writeHex(str string) (n int, err error) {
+func (c *testReadWriter) writeHex(str string) {
 	var buf []byte
+	var err error
+
 	if buf, err = hex.DecodeString(str); err != nil {
-		return
+		panic("writeHex: malformed hex: " + err.Error())
 	}
-	return c.readBuf.Write(buf)
+	if _, err = c.readBuf.Write(buf); err != nil {
+		panic("writeHex: buffered write failed: " + err.Error())
+	}
 }
 
 func (c *testReadWriter) readHex() string {

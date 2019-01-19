@@ -158,7 +158,7 @@ func BenchmarkEncoder_Encode(b *testing.B) {
 				b.Fatal("buffer.Read() failed:", err)
 			}
 
-			n, err = encoder.Encode(frame[:], chopBuf[:n])
+			n, _ = encoder.Encode(frame[:], chopBuf[:n])
 			transfered += n - FrameOverhead
 		}
 		if transfered != len(payload) {

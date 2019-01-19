@@ -137,7 +137,7 @@ func (hs *clientHandshake) generateHandshake() ([]byte, error) {
 	var buf bytes.Buffer
 
 	hs.mac.Reset()
-	hs.mac.Write(hs.keypair.Representative().Bytes()[:])
+	_, _ = hs.mac.Write(hs.keypair.Representative().Bytes()[:])
 	mark := hs.mac.Sum(nil)[:markLength]
 
 	// The client handshake is X | P_C | M_C | MAC(X | P_C | M_C | E) where:
@@ -161,9 +161,9 @@ func (hs *clientHandshake) generateHandshake() ([]byte, error) {
 
 	// Calculate and write the MAC.
 	hs.mac.Reset()
-	hs.mac.Write(buf.Bytes())
+	_, _ = hs.mac.Write(buf.Bytes())
 	hs.epochHour = []byte(strconv.FormatInt(getEpochHour(), 10))
-	hs.mac.Write(hs.epochHour)
+	_, _ = hs.mac.Write(hs.epochHour)
 	buf.Write(hs.mac.Sum(nil)[:macLength])
 
 	return buf.Bytes(), nil
@@ -185,7 +185,7 @@ func (hs *clientHandshake) parseServerHandshake(resp []byte) (int, []byte, error
 
 		// Derive the mark.
 		hs.mac.Reset()
-		hs.mac.Write(hs.serverRepresentative.Bytes()[:])
+		_, _ = hs.mac.Write(hs.serverRepresentative.Bytes()[:])
 		hs.serverMark = hs.mac.Sum(nil)[:markLength]
 	}
 
@@ -201,8 +201,8 @@ func (hs *clientHandshake) parseServerHandshake(resp []byte) (int, []byte, error
 
 	// Validate the MAC.
 	hs.mac.Reset()
-	hs.mac.Write(resp[:pos+markLength])
-	hs.mac.Write(hs.epochHour)
+	_, _ = hs.mac.Write(resp[:pos+markLength])
+	_, _ = hs.mac.Write(hs.epochHour)
 	macCmp := hs.mac.Sum(nil)[:macLength]
 	macRx := resp[pos+markLength : pos+markLength+macLength]
 	if !hmac.Equal(macCmp, macRx) {
@@ -262,7 +262,7 @@ func (hs *serverHandshake) parseClientHandshake(filter *replayfilter.ReplayFilte
 
 		// Derive the mark.
 		hs.mac.Reset()
-		hs.mac.Write(hs.clientRepresentative.Bytes()[:])
+		_, _ = hs.mac.Write(hs.clientRepresentative.Bytes()[:])
 		hs.clientMark = hs.mac.Sum(nil)[:markLength]
 	}
 
@@ -282,8 +282,8 @@ func (hs *serverHandshake) parseClientHandshake(filter *replayfilter.ReplayFilte
 		// Allow epoch to be off by up to a hour in either direction.
 		epochHour := []byte(strconv.FormatInt(getEpochHour()+int64(off), 10))
 		hs.mac.Reset()
-		hs.mac.Write(resp[:pos+markLength])
-		hs.mac.Write(epochHour)
+		_, _ = hs.mac.Write(resp[:pos+markLength])
+		_, _ = hs.mac.Write(epochHour)
 		macCmp := hs.mac.Sum(nil)[:macLength]
 		macRx := resp[pos+markLength : pos+markLength+macLength]
 		if hmac.Equal(macCmp, macRx) {
@@ -329,7 +329,7 @@ func (hs *serverHandshake) generateHandshake() ([]byte, error) {
 	var buf bytes.Buffer
 
 	hs.mac.Reset()
-	hs.mac.Write(hs.keypair.Representative().Bytes()[:])
+	_, _ = hs.mac.Write(hs.keypair.Representative().Bytes()[:])
 	mark := hs.mac.Sum(nil)[:markLength]
 
 	// The server handshake is Y | AUTH | P_S | M_S | MAC(Y | AUTH | P_S | M_S | E) where:
@@ -355,8 +355,8 @@ func (hs *serverHandshake) generateHandshake() ([]byte, error) {
 
 	// Calculate and write the MAC.
 	hs.mac.Reset()
-	hs.mac.Write(buf.Bytes())
-	hs.mac.Write(hs.epochHour) // Set in hs.parseClientHandshake()
+	_, _ = hs.mac.Write(buf.Bytes())
+	_, _ = hs.mac.Write(hs.epochHour) // Set in hs.parseClientHandshake()
 	buf.Write(hs.mac.Sum(nil)[:macLength])
 
 	return buf.Bytes(), nil

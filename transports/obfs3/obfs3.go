@@ -235,17 +235,17 @@ func (conn *obfs3Conn) kdf(sharedSecret []byte) error {
 	//   RESP_KEY = RESP_SECRET[:KEYLEN]
 	//   RESP_COUNTER = RESP_SECRET[KEYLEN:]
 	initHmac := hmac.New(sha256.New, sharedSecret)
-	initHmac.Write([]byte(initiatorKdfString))
+	_, _ = initHmac.Write([]byte(initiatorKdfString))
 	initSecret := initHmac.Sum(nil)
 	initHmac.Reset()
-	initHmac.Write([]byte(initiatorMagicString))
+	_, _ = initHmac.Write([]byte(initiatorMagicString))
 	initMagic := initHmac.Sum(nil)
 
 	respHmac := hmac.New(sha256.New, sharedSecret)
-	respHmac.Write([]byte(responderKdfString))
+	_, _ = respHmac.Write([]byte(responderKdfString))
 	respSecret := respHmac.Sum(nil)
 	respHmac.Reset()
-	respHmac.Write([]byte(responderMagicString))
+	_, _ = respHmac.Write([]byte(responderMagicString))
 	respMagic := respHmac.Sum(nil)
 
 	// The INIT_KEY value keys a block cipher (in CTR mode) used to

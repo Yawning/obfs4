@@ -216,7 +216,7 @@ func (c *meekConn) SetWriteDeadline(t time.Time) error {
 }
 
 func (c *meekConn) enqueueWrite(b []byte) (ok bool) {
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 	c.workerWrChan <- b
 	return true
 }
@@ -273,7 +273,7 @@ loop:
 			// If the poll interval has elapsed, issue a request.
 		case sndBuf = <-c.workerWrChan:
 			// If there is data pending a send, issue a request.
-		case _ = <-c.workerCloseChan:
+		case <-c.workerCloseChan:
 			break loop
 		}
 

@@ -75,23 +75,25 @@ func clientSetup() (launched bool, listeners []net.Listener) {
 	for _, name := range ptClientInfo.MethodNames {
 		t := transports.Get(name)
 		if t == nil {
-			pt.CmethodError(name, "no such transport is supported")
+			_ = pt.CmethodError(name, "no such transport is supported")
 			continue
 		}
 
 		f, err := t.ClientFactory(stateDir)
 		if err != nil {
-			pt.CmethodError(name, "failed to get ClientFactory")
+			_ = pt.CmethodError(name, "failed to get ClientFactory")
 			continue
 		}
 
 		ln, err := net.Listen("tcp", socksAddr)
 		if err != nil {
-			pt.CmethodError(name, err.Error())
+			_ = pt.CmethodError(name, err.Error())
 			continue
 		}
 
-		go clientAcceptLoop(f, ln, ptClientProxy)
+		go func() {
+			_ = clientAcceptLoop(f, ln, ptClientProxy)
+		}()
 		pt.Cmethod(name, socks5.Version(), ln.Addr())
 
 		log.Infof("%s - registered listener: %s", name, ln.Addr())
@@ -137,7 +139,7 @@ func clientHandler(f base.ClientFactory, conn net.Conn, proxyURI *url.URL) {
 	args, err := f.ParseArgs(&socksReq.Args)
 	if err != nil {
 		log.Errorf("%s(%s) - invalid arguments: %s", name, addrStr, err)
-		socksReq.Reply(socks5.ReplyGeneralFailure)
+		_ = socksReq.Reply(socks5.ReplyGeneralFailure)
 		return
 	}
 
@@ -149,7 +151,7 @@ func clientHandler(f base.ClientFactory, conn net.Conn, proxyURI *url.URL) {
 			// This should basically never happen, since config protocol
 			// verifies this.
 			log.Errorf("%s(%s) - failed to obtain proxy dialer: %s", name, addrStr, log.ElideError(err))
-			socksReq.Reply(socks5.ReplyGeneralFailure)
+			_ = socksReq.Reply(socks5.ReplyGeneralFailure)
 			return
 		}
 		dialFn = dialer.Dial
@@ -157,7 +159,7 @@ func clientHandler(f base.ClientFactory, conn net.Conn, proxyURI *url.URL) {
 	remote, err := f.Dial("tcp", socksReq.Target, dialFn, args)
 	if err != nil {
 		log.Errorf("%s(%s) - outgoing connection failed: %s", name, addrStr, log.ElideError(err))
-		socksReq.Reply(socks5.ErrorToReplyCode(err))
+		_ = socksReq.Reply(socks5.ErrorToReplyCode(err))
 		return
 	}
 	defer remote.Close()
@@ -172,8 +174,6 @@ func clientHandler(f base.ClientFactory, conn net.Conn, proxyURI *url.URL) {
 	} else {
 		log.Infof("%s(%s) - closed connection", name, addrStr)
 	}
-
-	return
 }
 
 func serverSetup() (launched bool, listeners []net.Listener) {
@@ -186,23 +186,25 @@ func serverSetup() (launched bool, listeners []net.Listener) {
 		name := bindaddr.MethodName
 		t := transports.Get(name)
 		if t == nil {
-			pt.SmethodError(name, "no such transport is supported")
+			_ = pt.SmethodError(name, "no such transport is supported")
 			continue
 		}
 
 		f, err := t.ServerFactory(stateDir, &bindaddr.Options)
 		if err != nil {
-			pt.SmethodError(name, err.Error())
+			_ = pt.SmethodError(name, err.Error())
 			continue
 		}
 
 		ln, err := net.ListenTCP("tcp", bindaddr.Addr)
 		if err != nil {
-			pt.SmethodError(name, err.Error())
+			_ = pt.SmethodError(name, err.Error())
 			continue
 		}
 
-		go serverAcceptLoop(f, ln, &ptServerInfo)
+		go func() {
+			_ = serverAcceptLoop(f, ln, &ptServerInfo)
+		}()
 		if args := f.Args(); args != nil {
 			pt.SmethodArgs(name, ln.Addr(), *args)
 		} else {
@@ -262,8 +264,6 @@ func serverHandler(f base.ServerFactory, conn net.Conn, info *pt.ServerInfo) {
 	} else {
 		log.Infof("%s(%s) - closed connection", name, addrStr)
 	}
-
-	return
 }
 
 func copyLoop(a net.Conn, b net.Conn) error {
@@ -326,7 +326,7 @@ func main() {
 
 	// Determine if this is a client or server, initialize the common state.
 	var ptListeners []net.Listener
-	launched := false
+	var launched bool
 	isClient, err := ptIsClient()
 	if err != nil {
 		golog.Fatalf("[ERROR]: %s - must be run as a managed transport", execName)

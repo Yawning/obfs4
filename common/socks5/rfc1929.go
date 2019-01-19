@@ -39,8 +39,8 @@ func (req *Request) authRFC1929() (err error) {
 	sendErrResp := func() {
 		// Swallow write/flush errors, the auth failure is the relevant error.
 		resp := []byte{authRFC1929Ver, authRFC1929Fail}
-		req.rw.Write(resp[:])
-		req.flushBuffers()
+		_, _ = req.rw.Write(resp[:])
+		_ = req.flushBuffers()
 	}
 
 	// The client sends a Username/Password request.
