@@ -69,7 +69,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 		return nil, err
 	}
 	conn := new(httpConn)
-	conn.httpConn = httputil.NewClientConn(c, nil)
+	conn.httpConn = httputil.NewClientConn(c, nil) // nolint: staticcheck
 	conn.remoteAddr, err = net.ResolveTCPAddr(network, addr)
 	if err != nil {
 		conn.httpConn.Close()
@@ -98,7 +98,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	req.Header.Set("User-Agent", "")
 
 	resp, err := conn.httpConn.Do(req)
-	if err != nil && err != httputil.ErrPersistEOF {
+	if err != nil && err != httputil.ErrPersistEOF { // nolint: staticcheck
 		conn.httpConn.Close()
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 
 type httpConn struct {
 	remoteAddr   *net.TCPAddr
-	httpConn     *httputil.ClientConn
+	httpConn     *httputil.ClientConn // nolint: staticcheck
 	hijackedConn net.Conn
 	staleReader  *bufio.Reader
 }
