@@ -19,7 +19,7 @@
    ScrambleSuit [0] has been developed with the aim of improving the obfs3 [1]
    protocol to provide resilience against active attackers and to disguise
    flow signatures.
- 
+
    ScrambleSuit like the existing obfs3 protocol uses UniformDH for the
    cryptographic handshake, which has severe performance implications due to
    modular exponentiation being a expensive operation.  Additionally, the key
@@ -230,7 +230,7 @@
      Bytes 064:071 - Server to Client 64 bit SipHash-2-4 OFB IV.
 
      Bytes 072:103 - Client to Server 256 bit NaCl secretbox key.
-     Bytes 104:119 - Client to Server NaCl secretbox nonce prefix.
+     Bytes 104:119 - Client to Server 128 bit NaCl secretbox nonce prefix.
      Bytes 120:135 - Client to Server 128 bit SipHash-2-4 key.
      Bytes 136:143 - Client to Server 64 bit SipHash-2-4 OFB IV.
 
