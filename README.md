@@ -29,28 +29,24 @@ handshake variants without being obscenely slow is non-trivial.
 
 ### Dependencies
 
-Build time library dependencies are handled by the Go module automatically, but
-are listed for clarity.
+Build time library dependencies are handled by the Go module automatically.
 
 If you are on Go versions earlier than 1.11, you might need to run `go get -d
 ./...` to download all the dependencies. Note however, that modules always use
 the same dependency versions, while `go get -d` always downloads master.
 
- * Go 1.2.0 or later. Prior versions of Go (Eg: 1.0.2) are missing certain
-   important parts of the runtime library like a SHA256 implementation.
- * go.crypto (https://golang.org/x/crypto)
- * go.net (https://golang.org/x/net)
- * ed25519/extra25519 (https://github.com/agl/ed25519/extra25519)
- * SipHash-2-4 (https://github.com/dchest/siphash)
- * goptlib (https://git.torproject.org/pluggable-transports/goptlib.git)
+ * Go 1.11.0 or later. Patches to support up to 2 prior major releases will
+   be accepted if they are not overly intrusive and well written.
+ * See `go.mod` for build time dependencies.
 
 ### Installation
 
 To build:
 
-	go build ./obfs4proxy
+	`go build -o obfs4proxy/obfs4proxy ./obfs4proxy`
 
-To install, copy `obfsproxy` to a permanent location (Eg: `/usr/local/bin`)
+To install, copy `./obfs4proxy/obfsproxy` to a permanent location
+(Eg: `/usr/local/bin`)
 
 Client side torrc configuration:
 ```
