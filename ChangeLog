@@ -1,3 +1,5 @@
+Changes in version 0.0.9 - UNRELEASED:
+
 Changes in version 0.0.8 - 2019-01-20:
  - Bug 24793: Send the correct authorization HTTP header for basic auth.
  - (meek_lite) Explicitly set Content-Length to zero when there is no data
