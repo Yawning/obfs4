@@ -33,13 +33,35 @@ import (
 	"gitlab.com/yawning/obfs4.git/transports/base"
 )
 
-var errProtocolNegotiated = errors.New("meek_lite: protocol negotiated")
+var (
+	errProtocolNegotiated = errors.New("meek_lite: protocol negotiated")
+
+	// This should be kept in sync with what is available in utls.
+	clientHelloIDMap = map[string]*utls.ClientHelloID{
+		"hellogolang":           nil, // Don't bother with utls.
+		"hellorandomized":       &utls.HelloRandomized,
+		"hellorandomizedalpn":   &utls.HelloRandomizedALPN,
+		"hellorandomizednoalpn": &utls.HelloRandomizedNoALPN,
+		"hellofirefox_auto":     &utls.HelloFirefox_Auto,
+		"hellofirefox_55":       &utls.HelloFirefox_55,
+		"hellofirefox_56":       &utls.HelloFirefox_56,
+		"hellofirefox_63":       &utls.HelloFirefox_63,
+		"hellochrome_auto":      &utls.HelloChrome_Auto,
+		"hellochrome_58":        &utls.HelloChrome_58,
+		"hellochrome_62":        &utls.HelloChrome_62,
+		"hellochrome_70":        &utls.HelloChrome_70,
+		"helloios_auto":         &utls.HelloIOS_Auto,
+		"helloios_11_1":         &utls.HelloIOS_11_1,
+	}
+	defaultClientHello = &utls.HelloChrome_Auto
+)
 
 type roundTripper struct {
 	sync.Mutex
 
-	transport http.RoundTripper
-	dialFn    base.DialFunc
+	clientHelloID *utls.ClientHelloID
+	dialFn        base.DialFunc
+	transport     http.RoundTripper
 
 	initConn net.Conn
 }
@@ -105,15 +127,7 @@ func (rt *roundTripper) dialTLS(network, addr string) (net.Conn, error) {
 		host = addr
 	}
 
-	// TODO: Make this configurable.  What "works" is host dependent.
-	//  * HelloChrome_Auto  - Failures in a stand alone testcase against google.com
-	//  * HelloFirefox_Auto - Fails with the azure bridge, incompatible group.
-	//  * HelloIOS_Auto     - Seems to work.
-	//
-	// Since HelloChrome_Auto works with azure, that's what'll be used for
-	// now, since that's what the overwelming vast majority of people will
-	// use.
-	conn := utls.UClient(rawConn, &utls.Config{ServerName: host}, utls.HelloChrome_Auto)
+	conn := utls.UClient(rawConn, &utls.Config{ServerName: host}, *rt.clientHelloID)
 	if err = conn.Handshake(); err != nil {
 		conn.Close()
 		return nil, err
@@ -154,10 +168,26 @@ func getDialTLSAddr(u *url.URL) string {
 	return net.JoinHostPort(u.Host, u.Scheme)
 }
 
-func newRoundTripper(dialFn base.DialFunc) http.RoundTripper {
+func newRoundTripper(dialFn base.DialFunc, clientHelloID *utls.ClientHelloID) http.RoundTripper {
 	return &roundTripper{
-		dialFn: dialFn,
+		clientHelloID: clientHelloID,
+		dialFn:        dialFn,
 	}
+}
+
+func parseClientHelloID(s string) (*utls.ClientHelloID, error) {
+	s = strings.ToLower(s)
+	switch s {
+	case "none":
+		return nil, nil
+	case "":
+		return defaultClientHello, nil
+	default:
+		if ret := clientHelloIDMap[s]; ret != nil {
+			return ret, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid ClientHelloID: '%v'", s)
 }
 
 func init() {
