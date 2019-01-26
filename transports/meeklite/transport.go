@@ -83,7 +83,7 @@ func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 func (rt *roundTripper) getTransport(req *http.Request) error {
 	switch strings.ToLower(req.URL.Scheme) {
 	case "http":
-		rt.transport = &http.Transport{Dial: rt.dialFn}
+		rt.transport = newHTTPTransport(rt.dialFn, nil)
 		return nil
 	case "https":
 	default:
@@ -145,7 +145,7 @@ func (rt *roundTripper) dialTLS(network, addr string) (net.Conn, error) {
 		rt.transport = &http2.Transport{DialTLS: rt.dialTLSHTTP2}
 	default:
 		// Assume the remote peer is speaking HTTP 1.x + TLS.
-		rt.transport = &http.Transport{DialTLS: rt.dialTLS}
+		rt.transport = newHTTPTransport(nil, rt.dialTLS)
 	}
 
 	// Stash the connection just established for use servicing the
@@ -188,6 +188,21 @@ func parseClientHelloID(s string) (*utls.ClientHelloID, error) {
 		}
 	}
 	return nil, fmt.Errorf("invalid ClientHelloID: '%v'", s)
+}
+
+func newHTTPTransport(dialFn, dialTLSFn base.DialFunc) *http.Transport {
+	base := (http.DefaultTransport).(*http.Transport)
+
+	return &http.Transport{
+		Dial:    dialFn,
+		DialTLS: dialTLSFn,
+
+		// Use default configuration values, taken from the runtime.
+		MaxIdleConns:          base.MaxIdleConns,
+		IdleConnTimeout:       base.IdleConnTimeout,
+		TLSHandshakeTimeout:   base.TLSHandshakeTimeout,
+		ExpectContinueTimeout: base.ExpectContinueTimeout,
+	}
 }
 
 func init() {
