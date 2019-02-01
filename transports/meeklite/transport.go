@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -164,8 +165,9 @@ func getDialTLSAddr(u *url.URL) string {
 	if err == nil {
 		return net.JoinHostPort(host, port)
 	}
+	pInt, _ := net.LookupPort("tcp", u.Scheme)
 
-	return net.JoinHostPort(u.Host, u.Scheme)
+	return net.JoinHostPort(u.Host, strconv.Itoa(pInt))
 }
 
 func newRoundTripper(dialFn base.DialFunc, clientHelloID *utls.ClientHelloID) http.RoundTripper {
