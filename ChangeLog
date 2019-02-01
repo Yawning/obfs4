@@ -1,6 +1,7 @@
 Changes in version 0.0.9 - UNRELEASED:
  - Various meek_lite code cleanups and bug fixes.
  - Bug 29077: uTLS for ClientHello camouflage (meek_lite).
+ - More fixes to HTTP Basic auth.
 
 Changes in version 0.0.8 - 2019-01-20:
  - Bug 24793: Send the correct authorization HTTP header for basic auth.

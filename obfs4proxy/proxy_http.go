@@ -93,7 +93,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	if s.haveAuth {
 		// SetBasicAuth doesn't quite do what is appropriate, because
 		// the correct header is `Proxy-Authorization`.
-		req.Header.Set("Proxy-Authorization", base64.StdEncoding.EncodeToString([]byte(s.username+":"+s.password)))
+		req.Header.Set("Proxy-Authorization", "Basic " + base64.StdEncoding.EncodeToString([]byte(s.username+":"+s.password)))
 	}
 	req.Header.Set("User-Agent", "")
 
