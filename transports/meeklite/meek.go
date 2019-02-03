@@ -44,10 +44,9 @@ import (
 	"sync"
 	"time"
 
-	utls "github.com/refraction-networking/utls"
-
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"gitlab.com/yawning/obfs4.git/transports/base"
+	utls "gitlab.com/yawning/utls.git"
 )
 
 const (

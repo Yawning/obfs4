@@ -37,7 +37,7 @@ the same dependency versions, while `go get -d` always downloads master.
 
  * Go 1.11.0 or later. Patches to support up to 2 prior major releases will
    be accepted if they are not overly intrusive and well written.
- * See `go.mod` for build time dependencies.
+ * See `go.mod`, `go.sum` and `go list -m -u all` for build time dependencies.
 
 ### Installation
 

@@ -28,10 +28,9 @@ import (
 	"strings"
 	"sync"
 
-	utls "github.com/refraction-networking/utls"
-	"golang.org/x/net/http2"
-
 	"gitlab.com/yawning/obfs4.git/transports/base"
+	utls "gitlab.com/yawning/utls.git"
+	"golang.org/x/net/http2"
 )
 
 var (
@@ -51,10 +50,11 @@ var (
 		"hellochrome_58":        &utls.HelloChrome_58,
 		"hellochrome_62":        &utls.HelloChrome_62,
 		"hellochrome_70":        &utls.HelloChrome_70,
+		"hellochrome_71":        &utls.HelloChrome_71,
 		"helloios_auto":         &utls.HelloIOS_Auto,
 		"helloios_11_1":         &utls.HelloIOS_11_1,
 	}
-	defaultClientHello = &utls.HelloChrome_Auto
+	defaultClientHello = &utls.HelloFirefox_Auto
 )
 
 type roundTripper struct {
