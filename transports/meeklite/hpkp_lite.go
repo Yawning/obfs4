@@ -39,32 +39,42 @@ type pinEntry struct {
 
 func (db *hpkpDatabase) HasPins(host string) (string, bool) {
 	h, err := normalizeHost(host)
-	return h, (db.pins[host] != nil && err == nil)
+	if err == nil {
+		if entry := db.pins[host]; entry != nil {
+			if time.Now().Before(entry.expiry) {
+				return h, true
+			}
+		}
+	}
+	return h, false
 }
 
 func (db *hpkpDatabase) Validate(host string, chains [][]*x509.Certificate) bool {
-	var ok bool
-	if host, ok = db.HasPins(host); !ok {
+	host, err := normalizeHost(host)
+	if err != nil {
 		return false
 	}
-
 	entry := db.pins[host]
+	if entry == nil {
+		return false
+	}
 	if time.Now().After(entry.expiry) {
 		// If the pins are expired, assume that it is valid.
 		return true
 	}
 
+	// Search for an intersection between the pins and the cert chain.
 	for _, chain := range chains {
 		for _, cert := range chain {
 			derivedPin := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 			derivedPinEncoded := base64.StdEncoding.EncodeToString(derivedPin[:])
-			if !entry.digests[derivedPinEncoded] {
-				return false
+			if entry.digests[derivedPinEncoded] {
+				return true
 			}
 		}
 	}
 
-	return true
+	return false
 }
 
 func (db *hpkpDatabase) Add(host string, pins []string, expiry time.Time) {
@@ -93,15 +103,19 @@ func init() {
 		pins: make(map[string]*pinEntry),
 	}
 
-	// Generated on 2019-02-04, expiry set to the expiration date
-	// of the leaf, which is the earliest in the chain.
+	// Pin all of Microsoft's CA intermediary certificates for the
+	// Tor Browser Azure bridge.
+	//
+	// See: https://www.microsoft.com/pki/mscorp/cps/default.htm
 	builtinPinDB.Add(
 		"ajax.aspnetcdn.com",
 		[]string{
-			"PPjoAKk+kCVr9VNPXJkyHXEKnIyd5t5NqpPL3zCvJOE=",
-			"wBdPad95AU7OgLRs0FU/E6ILO1MSCM84kJ9y0H+TT7s=",
-			"Y9mvm0exBk1JoQ57f9Vm28jKo5lFm/woKcVxrYxu80o=",
+			"CzdPous1hY3sIkO55pUH7vklXyIHVZAl/UnprSQvpEI=", // Microsoft IT SSL SHA2 - 2018-05-07 17:03:30
+			"xjXxgkOYlag7jCtR5DreZm9b61iaIhd+J3+b2LiybIw=", // Microsoft IT TLS CA 1 - 2024-05-20 12:51:28
+			"wBdPad95AU7OgLRs0FU/E6ILO1MSCM84kJ9y0H+TT7s=", // Microsoft IT TLS CA 2 - 2024-05-20 12:51:57
+			"wUY9EOTJmS7Aj4fDVCu/KeE++mV7FgIcbn4WhMz1I2k=", // Microsoft IT TLS CA 4 - 2024-05-20 12:52:38
+			"RCbqB+W8nwjznTeP4O6VjqcwdxIgI79eBpnBKRr32gc=", // Microsoft IT TLS CA 5 - 2024-05-20 12:53:03
 		},
-		time.Date(2020, time.March, 30, 17, 48, 56, 0, time.UTC),
+		time.Date(2024, time.March, 05, 20, 00, 00, 00, time.UTC),
 	)
 }
