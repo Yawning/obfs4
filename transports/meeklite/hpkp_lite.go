@@ -116,6 +116,6 @@ func init() {
 			"wUY9EOTJmS7Aj4fDVCu/KeE++mV7FgIcbn4WhMz1I2k=", // Microsoft IT TLS CA 4 - 2024-05-20 12:52:38
 			"RCbqB+W8nwjznTeP4O6VjqcwdxIgI79eBpnBKRr32gc=", // Microsoft IT TLS CA 5 - 2024-05-20 12:53:03
 		},
-		time.Date(2024, time.March, 05, 20, 00, 00, 00, time.UTC),
+		time.Date(2024, time.May, 20, 00, 00, 00, 00, time.UTC),
 	)
 }
