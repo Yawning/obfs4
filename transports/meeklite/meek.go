@@ -41,6 +41,7 @@ import (
 	gourl "net/url"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,9 +51,10 @@ import (
 )
 
 const (
-	urlArg   = "url"
-	frontArg = "front"
-	utlsArg  = "utls"
+	urlArg         = "url"
+	frontArg       = "front"
+	utlsArg        = "utls"
+	disableHPKPArg = "disableHPKP"
 
 	maxChanBacklog = 16
 
@@ -76,7 +78,8 @@ type meekClientArgs struct {
 	url   *gourl.URL
 	front string
 
-	utls *utls.ClientHelloID
+	utls        *utls.ClientHelloID
+	disableHPKP bool
 }
 
 func (ca *meekClientArgs) Network() string {
@@ -112,6 +115,12 @@ func newClientArgs(args *pt.Args) (ca *meekClientArgs, err error) {
 	utlsOpt, _ := args.Get(utlsArg)
 	if ca.utls, err = parseClientHelloID(utlsOpt); err != nil {
 		return nil, err
+	}
+
+	// Parse the (optional) HPKP disable argument.
+	hpkpOpt, _ := args.Get(disableHPKPArg)
+	if strings.ToLower(hpkpOpt) == "true" {
+		ca.disableHPKP = true
 	}
 
 	return ca, nil
@@ -358,7 +367,7 @@ func newMeekConn(network, addr string, dialFn base.DialFunc, ca *meekClientArgs)
 	case nil:
 		rt = &http.Transport{Dial: dialFn}
 	default:
-		rt = newRoundTripper(dialFn, ca.utls)
+		rt = newRoundTripper(dialFn, ca.utls, ca.disableHPKP)
 	}
 
 	conn := &meekConn{

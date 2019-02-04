@@ -2,6 +2,8 @@ Changes in version 0.0.9 - UNRELEASED:
  - Various meek_lite code cleanups and bug fixes.
  - Bug 29077: uTLS for ClientHello camouflage (meek_lite).
  - More fixes to HTTP Basic auth.
+ - (meek_lite) Pin the certificate chain public keys for the default
+   Tor Browser Azure bridge (meek_lite).
 
 Changes in version 0.0.8 - 2019-01-20:
  - Bug 24793: Send the correct authorization HTTP header for basic auth.

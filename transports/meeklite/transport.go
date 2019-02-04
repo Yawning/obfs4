@@ -19,6 +19,7 @@ package meeklite
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -28,6 +29,7 @@ import (
 	"strings"
 	"sync"
 
+	"gitlab.com/yawning/obfs4.git/common/log"
 	"gitlab.com/yawning/obfs4.git/transports/base"
 	utls "gitlab.com/yawning/utls.git"
 	"golang.org/x/net/http2"
@@ -64,7 +66,8 @@ type roundTripper struct {
 	dialFn        base.DialFunc
 	transport     http.RoundTripper
 
-	initConn net.Conn
+	initConn    net.Conn
+	disableHPKP bool
 }
 
 func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -128,7 +131,25 @@ func (rt *roundTripper) dialTLS(network, addr string) (net.Conn, error) {
 		host = addr
 	}
 
-	conn := utls.UClient(rawConn, &utls.Config{ServerName: host}, *rt.clientHelloID)
+	var verifyPeerCertificateFn func([][]byte, [][]*x509.Certificate) error
+	if !rt.disableHPKP {
+		if pinHost, ok := builtinPinDB.HasPins(host); ok {
+			if rt.transport == nil {
+				log.Debugf("meek_lite - HPKP enabled for host: %v", pinHost)
+			}
+			verifyPeerCertificateFn = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+				if !builtinPinDB.Validate(pinHost, verifiedChains) {
+					log.Errorf("meek_lite - HPKP validation failure, potential MITM for host: %v", pinHost)
+					return fmt.Errorf("meek_lite: HPKP validation failure for host: %v", pinHost)
+				}
+				return nil
+			}
+		}
+	} else if rt.transport == nil {
+		log.Warnf("meek_lite - HPKP disabled for host: %v", host)
+	}
+
+	conn := utls.UClient(rawConn, &utls.Config{ServerName: host, VerifyPeerCertificate: verifyPeerCertificateFn}, *rt.clientHelloID)
 	if err = conn.Handshake(); err != nil {
 		conn.Close()
 		return nil, err
@@ -170,10 +191,11 @@ func getDialTLSAddr(u *url.URL) string {
 	return net.JoinHostPort(u.Host, strconv.Itoa(pInt))
 }
 
-func newRoundTripper(dialFn base.DialFunc, clientHelloID *utls.ClientHelloID) http.RoundTripper {
+func newRoundTripper(dialFn base.DialFunc, clientHelloID *utls.ClientHelloID, disableHPKP bool) http.RoundTripper {
 	return &roundTripper{
 		clientHelloID: clientHelloID,
 		dialFn:        dialFn,
+		disableHPKP:   disableHPKP,
 	}
 }
 
