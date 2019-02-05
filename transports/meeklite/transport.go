@@ -234,4 +234,5 @@ func init() {
 	// underneath, and this doesn't (shouldn't) affect the external
 	// fingerprint.
 	utls.EnableWeakCiphers()
+	utls.EnableVartimeGroups()
 }
