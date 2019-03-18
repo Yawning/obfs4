@@ -149,7 +149,15 @@ func (rt *roundTripper) dialTLS(network, addr string) (net.Conn, error) {
 		log.Warnf("meek_lite - HPKP disabled for host: %v", host)
 	}
 
-	conn := utls.UClient(rawConn, &utls.Config{ServerName: host, VerifyPeerCertificate: verifyPeerCertificateFn}, *rt.clientHelloID)
+	conn := utls.UClient(rawConn, &utls.Config{
+		ServerName:            host,
+		VerifyPeerCertificate: verifyPeerCertificateFn,
+
+		// `crypto/tls` gradually ramps up the record size.  While this is
+		// a good optimization and is a relatively common server feature,
+		// neither Firefox nor Chromium appear to use such optimizations.
+		DynamicRecordSizingDisabled: true,
+	}, *rt.clientHelloID)
 	if err = conn.Handshake(); err != nil {
 		conn.Close()
 		return nil, err
