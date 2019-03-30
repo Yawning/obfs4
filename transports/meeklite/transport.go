@@ -48,13 +48,15 @@ var (
 		"hellofirefox_55":       &utls.HelloFirefox_55,
 		"hellofirefox_56":       &utls.HelloFirefox_56,
 		"hellofirefox_63":       &utls.HelloFirefox_63,
+		"hellofirefix_65":       &utls.HelloFirefox_65,
 		"hellochrome_auto":      &utls.HelloChrome_Auto,
 		"hellochrome_58":        &utls.HelloChrome_58,
 		"hellochrome_62":        &utls.HelloChrome_62,
 		"hellochrome_70":        &utls.HelloChrome_70,
-		"hellochrome_71":        &utls.HelloChrome_71,
+		"hellochrome_72":        &utls.HelloChrome_72,
 		"helloios_auto":         &utls.HelloIOS_Auto,
 		"helloios_11_1":         &utls.HelloIOS_11_1,
+		"helloios_12_1":         &utls.HelloIOS_12_1,
 	}
 	defaultClientHello = &utls.HelloFirefox_Auto
 )
@@ -238,9 +240,10 @@ func newHTTPTransport(dialFn, dialTLSFn base.DialFunc) *http.Transport {
 }
 
 func init() {
-	// Attempt to increase compatibility, there's an encrypted link
-	// underneath, and this doesn't (shouldn't) affect the external
-	// fingerprint.
+	// Attempt to increase compatibility and performance, there's an
+	// encrypted link underneath, and this doesn't (shouldn't) affect
+	// the external fingerprint.
 	utls.EnableWeakCiphers()
 	utls.EnableVartimeGroups()
+	utls.EnableVartimeAES()
 }
