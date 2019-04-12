@@ -1,4 +1,6 @@
-Changes in version 0.0.10 - UNRELEASED:
+Changes in version 0.0.10 - 2019-04-12:
+ - Disable behavior distinctive to crypto/tls when using utls.
+ - Bump the version of the utls fork.
 
 Changes in version 0.0.9 - 2019-02-05:
  - Various meek_lite code cleanups and bug fixes.
