@@ -1,5 +1,5 @@
 ## obfs4 - The obfourscator
-#### Yawning Angel (yawning at torproject dot org)
+#### Yawning Angel (yawning at schwanenlied dot me)
 
 ### What?
 
