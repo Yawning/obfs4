@@ -34,6 +34,8 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"strconv"
@@ -67,9 +69,8 @@ const (
 	serverHandshakeTimeout = time.Duration(30) * time.Second
 	replayTTL              = time.Duration(3) * time.Hour
 
-	maxIATDelay        = 100
-	maxCloseDelayBytes = maxHandshakeLength
-	maxCloseDelay      = 60
+	maxIATDelay   = 100
+	maxCloseDelay = 60
 )
 
 const (
@@ -138,7 +139,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 	}
 	rng := rand.New(drbg)
 
-	sf := &obfs4ServerFactory{t, &ptArgs, st.nodeID, st.identityKey, st.drbgSeed, iatSeed, st.iatMode, filter, rng.Intn(maxCloseDelayBytes), rng.Intn(maxCloseDelay)}
+	sf := &obfs4ServerFactory{t, &ptArgs, st.nodeID, st.identityKey, st.drbgSeed, iatSeed, st.iatMode, filter, rng.Intn(maxCloseDelay)}
 	return sf, nil
 }
 
@@ -233,8 +234,7 @@ type obfs4ServerFactory struct {
 	iatMode      int
 	replayFilter *replayfilter.ReplayFilter
 
-	closeDelayBytes int
-	closeDelay      int
+	closeDelay int
 }
 
 func (sf *obfs4ServerFactory) Transport() base.Transport {
@@ -592,17 +592,9 @@ func (conn *obfs4Conn) closeAfterDelay(sf *obfs4ServerFactory, startTime time.Ti
 		return
 	}
 
-	// Consume and discard data on this connection until either the specified
-	// interval passes or a certain size has been reached.
-	discarded := 0
-	var buf [framing.MaximumSegmentLength]byte
-	for discarded < int(sf.closeDelayBytes) {
-		n, err := conn.Conn.Read(buf[:])
-		if err != nil {
-			return
-		}
-		discarded += n
-	}
+	// Consume and discard data on this connection until the specified interval
+	// passes.
+	_, _ = io.Copy(ioutil.Discard, conn.Conn)
 }
 
 func (conn *obfs4Conn) padBurst(burst *bytes.Buffer, toPadTo int) (err error) {
