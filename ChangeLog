@@ -2,6 +2,7 @@ Changes in version 0.0.11 - UNRELEASED:
  - Update my e-mail address.
  - Change the obfs4 behavior for handling handshake failure to be more
    uniform.  Thanks to Sergey Frolov for assistance.
+ - Bump the version of the utls fork.
 
 Changes in version 0.0.10 - 2019-04-12:
  - Disable behavior distinctive to crypto/tls when using utls.
