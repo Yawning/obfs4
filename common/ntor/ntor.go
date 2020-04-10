@@ -43,10 +43,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/agl/ed25519/extra25519"
-	"gitlab.com/yawning/obfs4.git/common/csrand"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
+
+	"gitlab.com/yawning/obfs4.git/common/csrand"
+	"gitlab.com/yawning/obfs4.git/internal/extra25519"
 )
 
 const (
@@ -203,7 +204,7 @@ func (repr *Representative) Bytes() *[RepresentativeLength]byte {
 func (repr *Representative) ToPublic() *PublicKey {
 	pub := new(PublicKey)
 
-	extra25519.RepresentativeToPublicKey(pub.Bytes(), repr.Bytes())
+	extra25519.UnsafeBrokenRepresentativeToPublicKey(pub.Bytes(), repr.Bytes())
 	return pub
 }
 
@@ -275,7 +276,7 @@ func NewKeypair(elligator bool) (*Keypair, error) {
 
 		if elligator {
 			// Apply the Elligator transform.  This fails ~50% of the time.
-			if !extra25519.ScalarBaseMult(keypair.public.Bytes(),
+			if !extra25519.UnsafeBrokenScalarBaseMult(keypair.public.Bytes(),
 				keypair.representative.Bytes(),
 				keypair.private.Bytes()) {
 				continue
