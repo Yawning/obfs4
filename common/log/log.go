@@ -70,6 +70,7 @@ func Init(enable bool, logFilePath string, unsafe bool) error {
 		log.SetOutput(ioutil.Discard)
 	}
 	enableLogging = enable
+	unsafeLogging = unsafe
 	return nil
 }
 
