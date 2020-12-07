@@ -103,19 +103,22 @@ func init() {
 		pins: make(map[string]*pinEntry),
 	}
 
-	// Pin all of Microsoft's CA intermediary certificates for the
-	// Tor Browser Azure bridge.
+	// Pin all of Microsoft Azure's root CA certificates for the Tor Browser
+	// Azure bridge.
 	//
-	// See: https://www.microsoft.com/pki/mscorp/cps/default.htm
+	// See: https://docs.microsoft.com/en-us/azure/security/fundamentals/tls-certificate-changes
 	builtinPinDB.Add(
 		"ajax.aspnetcdn.com",
 		[]string{
-			"CzdPous1hY3sIkO55pUH7vklXyIHVZAl/UnprSQvpEI=", // Microsoft IT SSL SHA2 - 2018-05-07 17:03:30
-			"xjXxgkOYlag7jCtR5DreZm9b61iaIhd+J3+b2LiybIw=", // Microsoft IT TLS CA 1 - 2024-05-20 12:51:28
-			"wBdPad95AU7OgLRs0FU/E6ILO1MSCM84kJ9y0H+TT7s=", // Microsoft IT TLS CA 2 - 2024-05-20 12:51:57
-			"wUY9EOTJmS7Aj4fDVCu/KeE++mV7FgIcbn4WhMz1I2k=", // Microsoft IT TLS CA 4 - 2024-05-20 12:52:38
-			"RCbqB+W8nwjznTeP4O6VjqcwdxIgI79eBpnBKRr32gc=", // Microsoft IT TLS CA 5 - 2024-05-20 12:53:03
+			"i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=", // DigiCert Global Root G2 - 2038-01-15 12:00:00
+			"r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=", // DigiCert Global Root CA - 2031-11-10 00:00:00
+			"Y9mvm0exBk1JoQ57f9Vm28jKo5lFm/woKcVxrYxu80o=", // Baltimore CyberTrust Root - 2025-05-12 23:59:00
+			"7KDxgUAs56hlKzG00DbfJH46MLf0GlDZHsT5CwBrQ6E=", // D-TRUST Root Class 3 CA 2 2009 - 2029-11-05 08:35:58
+			"svcpi1K/LDysTd/nLeTWgqxYlXWVmC8rYjAa9ZfGmcU=", // Microsoft RSA Root Certificate Authority 2017 - 2042-07-18 23:00:23
+			"NfU84SZGEeAzQP434ex9TMmGxWE9ynD9BKpEVF8tryg=", // Microsoft ECC Root Certificate Authority 2017 - 2042-07-18 23:16:04
 		},
-		time.Date(2024, time.May, 20, 00, 00, 00, 00, time.UTC),
+		// As of 2020-12-07, we're getting the "DigiCert Global Root CA"
+		// certificate, so our expiration time matches this certificate.
+		time.Date(2031, time.November, 20, 00, 00, 00, 00, time.UTC),
 	)
 }

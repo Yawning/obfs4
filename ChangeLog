@@ -1,5 +1,6 @@
 Changes in version 0.0.12 - UNRELEASED:
  - Replace the extra25519 import with an internal package.
+ - Update the Azure TLS certificate digest (Thanks to Philipp Winter).
 
 Changes in version 0.0.11 - 2019-06-21:
  - Update my e-mail address.
