@@ -45,7 +45,7 @@ To build:
 
 	`go build -o obfs4proxy/obfs4proxy ./obfs4proxy`
 
-To install, copy `./obfs4proxy/obfsproxy` to a permanent location
+To install, copy `./obfs4proxy/obfs4proxy` to a permanent location
 (Eg: `/usr/local/bin`)
 
 Client side torrc configuration:
