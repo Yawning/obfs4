@@ -43,7 +43,9 @@ the same dependency versions, while `go get -d` always downloads master.
 
 To build:
 
-	`go build -o obfs4proxy/obfs4proxy ./obfs4proxy`
+```
+go build -o obfs4proxy/obfs4proxy ./obfs4proxy
+```
 
 To install, copy `./obfs4proxy/obfs4proxy` to a permanent location
 (Eg: `/usr/local/bin`)
