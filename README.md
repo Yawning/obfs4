@@ -90,7 +90,9 @@ ServerTransportPlugin obfs4 exec /usr/local/bin/obfs4proxy
 
 ### Thanks
 
+ * Loup Vaillant for motivating me to replace the Elligator implementation
+   and a body of code I could draw on to accelerate the replacement process.
  * David Fifield for goptlib.
- * Adam Langley for his Elligator implementation.
+ * Adam Langley for his initial Elligator implementation.
  * Philipp Winter for the ScrambleSuit protocol which provided much of the
    design.

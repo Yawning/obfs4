@@ -38,6 +38,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
@@ -47,7 +48,7 @@ import (
 	"golang.org/x/crypto/hkdf"
 
 	"gitlab.com/yawning/obfs4.git/common/csrand"
-	"gitlab.com/yawning/obfs4.git/internal/extra25519"
+	"gitlab.com/yawning/obfs4.git/internal/x25519ell2"
 )
 
 const (
@@ -204,7 +205,7 @@ func (repr *Representative) Bytes() *[RepresentativeLength]byte {
 func (repr *Representative) ToPublic() *PublicKey {
 	pub := new(PublicKey)
 
-	extra25519.UnsafeBrokenRepresentativeToPublicKey(pub.Bytes(), repr.Bytes())
+	x25519ell2.RepresentativeToPublicKey(pub.Bytes(), repr.Bytes())
 	return pub
 }
 
@@ -263,22 +264,28 @@ func NewKeypair(elligator bool) (*Keypair, error) {
 
 	for {
 		// Generate a Curve25519 private key.  Like everyone who does this,
-		// run the CSPRNG output through SHA256 for extra tinfoil hattery.
+		// run the CSPRNG output through SHA512 for extra tinfoil hattery.
+		//
+		// Also use part of the digest that gets truncated off for the
+		// obfuscation tweak.
 		priv := keypair.private.Bytes()[:]
 		if err := csrand.Bytes(priv); err != nil {
 			return nil, err
 		}
-		digest := sha256.Sum256(priv)
+		digest := sha512.Sum512(priv)
 		digest[0] &= 248
 		digest[31] &= 127
 		digest[31] |= 64
 		copy(priv, digest[:])
 
 		if elligator {
+			tweak := digest[63]
+
 			// Apply the Elligator transform.  This fails ~50% of the time.
-			if !extra25519.UnsafeBrokenScalarBaseMult(keypair.public.Bytes(),
+			if !x25519ell2.ScalarBaseMult(keypair.public.Bytes(),
 				keypair.representative.Bytes(),
-				keypair.private.Bytes()) {
+				keypair.private.Bytes(),
+				tweak) {
 				continue
 			}
 		} else {

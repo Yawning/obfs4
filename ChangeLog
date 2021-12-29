@@ -1,4 +1,6 @@
 Changes in version 0.0.12 - UNRELEASED:
+ - Fix the long standing distinguishers associated with agl's Elligator2
+   implementation (Thanks to Loup Vaillant).
  - Replace the extra25519 import with an internal package.
  - Update the Azure TLS certificate digest (Thanks to Philipp Winter).
  - Make the -unsafeLogging command line switch work.
