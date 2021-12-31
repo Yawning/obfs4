@@ -15,7 +15,7 @@
 
 // Package x25519ell2 implements obfuscated X25519 ECDH, via the Elligator2
 // mapping.
-package x25519ell2
+package x25519ell2 // import "gitlab.com/yawning/obfs4.git/internal/x25519ell2"
 
 import (
 	"encoding/binary"
