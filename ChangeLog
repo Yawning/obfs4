@@ -1,4 +1,4 @@
-Changes in version 0.0.12 - UNRELEASED:
+Changes in version 0.0.12 - 2021-12-31:
  - Fix the long standing distinguishers associated with agl's Elligator2
    implementation (Thanks to Loup Vaillant).
  - Replace the extra25519 import with an internal package.
