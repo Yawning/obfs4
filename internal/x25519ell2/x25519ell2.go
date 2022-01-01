@@ -76,7 +76,7 @@ func mustFeFromUint64(x uint64) *field.Element {
 func selectLowOrderPoint(out, x, k *field.Element, cofactor uint8) {
 	out.Zero()
 	out.Select(k, out, int((cofactor>>1)&1)) // bit 1
-	out.Select(x, out, int((cofactor>>0)&1)) // bit 1
+	out.Select(x, out, int((cofactor>>0)&1)) // bit 0
 	var tmp field.Element
 	tmp.Negate(out)
 	out.Select(&tmp, out, int((cofactor>>2)&1)) // bit 2
