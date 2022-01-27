@@ -13,10 +13,9 @@ be it via the modified scalar basepoint multiply or via decoding a
 representative will be somewhat non-standard, but will interoperate with
 a standard X25519 scalar-multiply.
 
-As the obfs4 handshake does not include the decoded representative in
-any of it's authenticated handshake digest calculations, this change is
-fully-backward compatible (though the non-upgraded side of the connection
-will still be trivially distinguishable from random).
+As the representative to public key transform should be identical,
+this change is fully-backward compatible (though the non-upgraded side
+of the connection will still be trivially distinguishable from random).
 
 ##### Maintainer's rant
 
