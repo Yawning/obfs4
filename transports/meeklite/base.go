@@ -85,5 +85,7 @@ func (cf *meekClientFactory) Dial(network, addr string, dialFn base.DialFunc, ar
 	return newMeekConn(network, addr, dialFn, ca)
 }
 
-var _ base.ClientFactory = (*meekClientFactory)(nil)
-var _ base.Transport = (*Transport)(nil)
+var (
+	_ base.ClientFactory = (*meekClientFactory)(nil)
+	_ base.Transport     = (*Transport)(nil)
+)

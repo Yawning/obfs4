@@ -1,4 +1,6 @@
 Changes in version 0.0.13 - UNRELEASED:
+ - Stop using utls entirely for TLS signature normalization (meek_lite).
+ - Stop pinning the certificate chain for default bridges (meek_lite).
 
 Changes in version 0.0.12 - 2021-12-31:
  - Fix the long standing distinguishers associated with agl's Elligator2

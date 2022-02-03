@@ -41,20 +41,16 @@ import (
 	gourl "net/url"
 	"os"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
 	"git.torproject.org/pluggable-transports/goptlib.git"
 	"gitlab.com/yawning/obfs4.git/transports/base"
-	utls "gitlab.com/yawning/utls.git"
 )
 
 const (
-	urlArg         = "url"
-	frontArg       = "front"
-	utlsArg        = "utls"
-	disableHPKPArg = "disableHPKP"
+	urlArg   = "url"
+	frontArg = "front"
 
 	maxChanBacklog = 16
 
@@ -77,9 +73,6 @@ var (
 type meekClientArgs struct {
 	url   *gourl.URL
 	front string
-
-	utls        *utls.ClientHelloID
-	disableHPKP bool
 }
 
 func (ca *meekClientArgs) Network() string {
@@ -111,25 +104,13 @@ func newClientArgs(args *pt.Args) (ca *meekClientArgs, err error) {
 	// Parse the (optional) front argument.
 	ca.front, _ = args.Get(frontArg)
 
-	// Parse the (optional) utls argument.
-	utlsOpt, _ := args.Get(utlsArg)
-	if ca.utls, err = parseClientHelloID(utlsOpt); err != nil {
-		return nil, err
-	}
-
-	// Parse the (optional) HPKP disable argument.
-	hpkpOpt, _ := args.Get(disableHPKPArg)
-	if strings.ToLower(hpkpOpt) == "true" {
-		ca.disableHPKP = true
-	}
-
 	return ca, nil
 }
 
 type meekConn struct {
-	args         *meekClientArgs
-	sessionID    string
-	roundTripper http.RoundTripper
+	args      *meekClientArgs
+	sessionID string
+	transport *http.Transport
 
 	closeOnce       sync.Once
 	workerWrChan    chan []byte
@@ -261,7 +242,7 @@ func (c *meekConn) roundTrip(sndBuf []byte) (recvBuf []byte, err error) {
 		req.Header.Set("X-Session-Id", c.sessionID)
 		req.Header.Set("User-Agent", "")
 
-		resp, err = c.roundTripper.RoundTrip(req)
+		resp, err = c.transport.RoundTrip(req)
 		if err != nil {
 			return nil, err
 		}
@@ -362,18 +343,10 @@ func newMeekConn(network, addr string, dialFn base.DialFunc, ca *meekClientArgs)
 		return nil, err
 	}
 
-	var rt http.RoundTripper
-	switch ca.utls {
-	case nil:
-		rt = &http.Transport{Dial: dialFn}
-	default:
-		rt = newRoundTripper(dialFn, ca.utls, ca.disableHPKP)
-	}
-
 	conn := &meekConn{
 		args:            ca,
 		sessionID:       id,
-		roundTripper:    rt,
+		transport:       &http.Transport{Dial: dialFn},
 		workerWrChan:    make(chan []byte, maxChanBacklog),
 		workerRdChan:    make(chan []byte, maxChanBacklog),
 		workerCloseChan: make(chan struct{}),
@@ -394,5 +367,7 @@ func newSessionID() (string, error) {
 	return hex.EncodeToString(h[:16]), nil
 }
 
-var _ net.Conn = (*meekConn)(nil)
-var _ net.Addr = (*meekClientArgs)(nil)
+var (
+	_ net.Conn = (*meekConn)(nil)
+	_ net.Addr = (*meekClientArgs)(nil)
+)
