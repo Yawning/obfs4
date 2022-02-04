@@ -1,4 +1,4 @@
-Changes in version 0.0.13 - UNRELEASED:
+Changes in version 0.0.13 - 2022-02-04:
  - Stop using utls entirely for TLS signature normalization (meek_lite).
  - Stop pinning the certificate chain for default bridges (meek_lite).
 
