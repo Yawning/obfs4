@@ -30,6 +30,10 @@ package ntor
 import (
 	"bytes"
 	"testing"
+
+	"filippo.io/edwards25519"
+	"filippo.io/edwards25519/field"
+	"gitlab.com/yawning/edwards25519-extra.git/elligator2"
 )
 
 // TestNewKeypair tests Curve25519/Elligator keypair generation.
@@ -123,6 +127,138 @@ func TestHandshake(t *testing.T) {
 	}
 	if 0 != bytes.Compare(clientAuth.Bytes()[:], serverAuth.Bytes()[:]) {
 		t.Fatal("AUTH mismatched between client/server")
+	}
+}
+
+// TestPublicKeySubgroup tests that Elligator representatives produced by
+// NewKeypair map to public keys that are not always on the prime-order subgroup
+// of Curve25519. (And incidentally that Elligator representatives agree with
+// the public key stored in the Keypair.)
+//
+// See discussion under "Step 2" at https://elligator.org/key-exchange.
+func TestPublicKeySubgroup(t *testing.T) {
+	// We will test the public keys that comes out of NewKeypair by
+	// multiplying each one by L, the order of the prime-order subgroup of
+	// Curve25519, then checking the order of the resulting point. The error
+	// condition we are checking for specifically is output points always
+	// having order 1, which means that public keys are always on the
+	// prime-order subgroup of Curve25519, which would make Elligator
+	// representatives distinguishable from random. More generally, we want
+	// to ensure that all possible output points of low order are covered.
+	//
+	// We have to do some contortions to conform to the interfaces we use.
+	// We do scalar multiplication by L using Edwards coordinates, rather
+	// than the Montgomery coordinates output by Keypair.Public and
+	// Representative.ToPublic, because the Montgomery-based
+	// crypto/curve25519.X25519 clamps the scalar to be a multiple of 8,
+	// which would not allow us to use the scalar we need. The Edwards-based
+	// ScalarMult only accepts scalars that are strictly less than L; we
+	// work around this by multiplying the point by L - 1, then adding the
+	// point once to the product.
+
+	scalarOrderMinus1, err := edwards25519.NewScalar().SetCanonicalBytes(
+		// This is the same as scMinusOne in filippo.io/edwards25519.
+		// https://github.com/FiloSottile/edwards25519/blob/v1.0.0/scalar.go#L34
+		[]byte{236, 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222, 249, 222, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16},
+	)
+	if err != nil {
+		panic(err)
+	}
+	// Returns a new edwards25519.Point that is v multiplied by the subgroup
+	// order.
+	scalarMultOrder := func(v *edwards25519.Point) *edwards25519.Point {
+		p := new(edwards25519.Point)
+		// v * (L - 1) + v => v * L
+		p.ScalarMult(scalarOrderMinus1, v)
+		p.Add(p, v)
+		return p
+	}
+
+	// Generates a new Keypair using NewKeypair, and returns the Keypair
+	// along, with its public key as a newly allocated edwards25519.Point.
+	generate := func() (*Keypair, *edwards25519.Point) {
+		kp, err := NewKeypair(true)
+		if err != nil {
+			panic(err)
+		}
+
+		// We will be using the Edwards representation of the public key
+		// (mapped from the Elligator representative) for further
+		// processing. But while we're here, check that the Montgomery
+		// representation output by Representative agrees with the
+		// stored public key.
+		if *kp.Representative().ToPublic() != *kp.Public() {
+			t.Fatal(kp.Representative().ToPublic(), kp.Public())
+		}
+
+		// Do the Elligator map in Edwards coordinates.
+		var clamped [32]byte
+		copy(clamped[:], kp.Representative().Bytes()[:])
+		clamped[31] &= 63
+		repr, err := new(field.Element).SetBytes(clamped[:])
+		if err != nil {
+			panic(err)
+		}
+		ed := elligator2.EdwardsFlavor(repr)
+		if !bytes.Equal(ed.BytesMontgomery(), kp.Public().Bytes()[:]) {
+			panic("Failed to derive an equivalent public key in Edwards coordinates")
+		}
+		return kp, ed
+	}
+
+	// These are all the points of low order that may result from
+	// multiplying an Elligator-mapped point by L. We will test that all of
+	// them are covered.
+	lowOrderPoints := [][32]byte{
+		/* order 1 */ {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		/* order 2 */ {236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127},
+		/* order 4 */ {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		/* order 4 */ {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128},
+		/* order 8 */ {38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152, 240, 213, 223, 172, 5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252, 5},
+		/* order 8 */ {38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152, 240, 213, 223, 172, 5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252, 133},
+		/* order 8 */ {199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15, 42, 32, 83, 250, 44, 57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 122},
+		/* order 8 */ {199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15, 42, 32, 83, 250, 44, 57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 250},
+	}
+	counts := make(map[[32]byte]int)
+	for _, b := range lowOrderPoints {
+		counts[b] = 0
+	}
+	// Assuming a uniform distribution of representatives, the probability
+	// that a specific low-order point will not be covered after n trials is
+	// (7/8)^n. The probability that *any* of the 8 low-order points will
+	// remain uncovered after n trials is at most 8 times that, 8*(7/8)^n.
+	// We must do at least log((1e-12)/8)/log(7/8) = 222.50 trials, in the
+	// worst case, to ensure a false error rate of less than 1 in a
+	// trillion. In practice, we keep track of the number of covered points
+	// and break the loop when it reaches 8, so when representatives are
+	// actually uniform we will usually run much fewer iterations.
+	numCovered := 0
+	for i := 0; i < 225; i++ {
+		kp, pk := generate()
+		v := scalarMultOrder(pk)
+		var b [32]byte
+		copy(b[:], v.Bytes())
+		if _, ok := counts[b]; !ok {
+			t.Fatalf("map(%x)*order yielded unexpected point %v",
+				*kp.Representative().Bytes(), b)
+		}
+		counts[b]++
+		if counts[b] == 1 {
+			// We just covered a new point for the first time.
+			numCovered++
+			if numCovered == len(lowOrderPoints) {
+				break
+			}
+		}
+	}
+	for _, b := range lowOrderPoints {
+		count, ok := counts[b]
+		if !ok {
+			panic(b)
+		}
+		if count == 0 {
+			t.Errorf("low-order point %x not covered", b)
+		}
 	}
 }
 
