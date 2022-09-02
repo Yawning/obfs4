@@ -273,9 +273,6 @@ func NewKeypair(elligator bool) (*Keypair, error) {
 			return nil, err
 		}
 		digest := sha512.Sum512(priv)
-		digest[0] &= 248
-		digest[31] &= 127
-		digest[31] |= 64
 		copy(priv, digest[:])
 
 		if elligator {
