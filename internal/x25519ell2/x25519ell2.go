@@ -144,6 +144,10 @@ func uToRepresentative(representative *[32]byte, u *field.Element, tweak byte) b
 // Note that this function will fail and return false for about
 // half of private keys.
 //
+// The `privateKey` input MUST be the full 32-bytes of entropy
+// (X25519-style "clamping" will result in non-uniformly distributed
+// representatives).
+//
 // WARNING: The underlying scalar multiply explicitly does not clear
 // the cofactor, and thus the public keys will be different from
 // those produced by normal implementations.
