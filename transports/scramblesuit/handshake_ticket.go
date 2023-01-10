@@ -133,6 +133,10 @@ func (s *ssTicketStore) getTicket(addr net.Addr) (*ssTicket, error) {
 }
 
 func (s *ssTicketStore) serialize() error {
+	if s.filePath == "" {
+		// if we have an unset filepath don't even attempt to serialize
+		return nil
+	}
 	encMap := make(map[string]*ssTicketJSON)
 	for k, v := range s.store {
 		kt := make([]byte, 0, ticketKeyLength+ticketLength)
@@ -150,6 +154,11 @@ func (s *ssTicketStore) serialize() error {
 }
 
 func loadTicketStore(stateDir string) (*ssTicketStore, error) {
+	if stateDir == "" {
+		// if no stateDir is provided do not attempt to read a ticketStore.
+		return &ssTicketStore{filePath: ""}, nil
+	}
+
 	fPath := path.Join(stateDir, ticketFile)
 	s := &ssTicketStore{filePath: fPath}
 	s.store = make(map[string]*ssTicket)

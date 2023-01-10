@@ -121,7 +121,7 @@ func serverStateFromArgs(stateDir string, args *pt.Args) (*obfs4ServerState, err
 
 	// Either a private key, node id, and seed are ALL specified, or
 	// they should be loaded from the state file.
-	if !privKeyOk && !nodeIDOk && !seedOk {
+	if !privKeyOk && !nodeIDOk && !seedOk && stateDir != "" {
 		if err := jsonServerStateFromFile(stateDir, &js); err != nil {
 			return nil, err
 		}
@@ -166,13 +166,18 @@ func serverStateFromJSONServerState(stateDir string, js *jsonServerState) (*obfs
 	st.iatMode = js.IATMode
 	st.cert = serverCertFromState(st)
 
-	// Generate a human readable summary of the configured endpoint.
-	if err = newBridgeFile(stateDir, st); err != nil {
-		return nil, err
+	// Avoid writing out any state files if no stateDir is provided.
+	if stateDir != "" {
+		// Generate a human readable summary of the configured endpoint.
+		if err = newBridgeFile(stateDir, st); err != nil {
+			return nil, err
+		}
+
+		// Write back the possibly updated server state.
+		return st, writeJSONServerState(stateDir, js)
 	}
 
-	// Write back the possibly updated server state.
-	return st, writeJSONServerState(stateDir, js)
+	return st, nil
 }
 
 func jsonServerStateFromFile(stateDir string, js *jsonServerState) error {
