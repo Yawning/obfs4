@@ -1,4 +1,5 @@
 Changes in version 0.0.15 - UNRELEASED:
+ - Bump the various dependencies.
 
 Changes in version 0.0.14 - 2022-09-04:
  - Fixed the incompete previous fix to the Elligator 2 subgroup issue (Thanks
