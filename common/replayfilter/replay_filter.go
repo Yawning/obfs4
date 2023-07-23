@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/dchest/siphash"
+
 	"gitlab.com/yawning/obfs4.git/common/csrand"
 )
 
@@ -67,21 +68,21 @@ type ReplayFilter struct {
 }
 
 // New creates a new ReplayFilter instance.
-func New(ttl time.Duration) (filter *ReplayFilter, err error) {
+func New(ttl time.Duration) (*ReplayFilter, error) {
 	// Initialize the SipHash-2-4 instance with a random key.
 	var key [16]byte
-	if err = csrand.Bytes(key[:]); err != nil {
-		return
+	if err := csrand.Bytes(key[:]); err != nil {
+		return nil, err
 	}
 
-	filter = new(ReplayFilter)
+	filter := new(ReplayFilter)
 	filter.filter = make(map[uint64]*entry)
 	filter.fifo = list.New()
 	filter.key[0] = binary.BigEndian.Uint64(key[0:8])
 	filter.key[1] = binary.BigEndian.Uint64(key[8:16])
 	filter.ttl = ttl
 
-	return
+	return filter, nil
 }
 
 // TestAndSet queries the filter for a given byte sequence, inserts the

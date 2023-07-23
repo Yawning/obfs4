@@ -35,12 +35,12 @@ const (
 	authRFC1929Fail    = 0x01
 )
 
-func (req *Request) authRFC1929() (err error) {
-	sendErrResp := func() {
+func (req *Request) authRFC1929() error {
+	sendErrResp := func(err error) error {
 		// Swallow write/flush errors, the auth failure is the relevant error.
-		resp := []byte{authRFC1929Ver, authRFC1929Fail}
-		_, _ = req.rw.Write(resp[:])
+		_, _ = req.rw.Write([]byte{authRFC1929Ver, authRFC1929Fail})
 		_ = req.flushBuffers()
+		return err // Pass this through from the arg.
 	}
 
 	// The client sends a Username/Password request.
@@ -50,39 +50,35 @@ func (req *Request) authRFC1929() (err error) {
 	//  uint8_t plen (>= 1)
 	//  uint8_t passwd[plen]
 
-	if err = req.readByteVerify("auth version", authRFC1929Ver); err != nil {
-		sendErrResp()
-		return
+	if err := req.readByteVerify("auth version", authRFC1929Ver); err != nil {
+		return sendErrResp(err)
 	}
 
 	// Read the username.
-	var ulen byte
+	var (
+		ulen byte
+		err  error
+	)
 	if ulen, err = req.readByte(); err != nil {
-		sendErrResp()
-		return
+		return sendErrResp(err)
 	} else if ulen < 1 {
-		sendErrResp()
-		return fmt.Errorf("username with 0 length")
+		return sendErrResp(fmt.Errorf("username with 0 length"))
 	}
 	var uname []byte
 	if uname, err = req.readBytes(int(ulen)); err != nil {
-		sendErrResp()
-		return
+		return sendErrResp(err)
 	}
 
 	// Read the password.
 	var plen byte
 	if plen, err = req.readByte(); err != nil {
-		sendErrResp()
-		return
+		return sendErrResp(err)
 	} else if plen < 1 {
-		sendErrResp()
-		return fmt.Errorf("password with 0 length")
+		return sendErrResp(fmt.Errorf("password with 0 length"))
 	}
 	var passwd []byte
 	if passwd, err = req.readBytes(int(plen)); err != nil {
-		sendErrResp()
-		return
+		return sendErrResp(err)
 	}
 
 	// Pluggable transports use the username/password field to pass
@@ -95,11 +91,10 @@ func (req *Request) authRFC1929() (err error) {
 		argStr += string(passwd)
 	}
 	if req.Args, err = parseClientParameters(argStr); err != nil {
-		sendErrResp()
-		return
+		return sendErrResp(err)
 	}
 
 	resp := []byte{authRFC1929Ver, authRFC1929Success}
-	_, err = req.rw.Write(resp[:])
-	return
+	_, err = req.rw.Write(resp)
+	return err
 }

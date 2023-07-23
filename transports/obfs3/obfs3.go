@@ -40,7 +40,8 @@ import (
 	"net"
 	"time"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+
 	"gitlab.com/yawning/obfs4.git/common/csrand"
 	"gitlab.com/yawning/obfs4.git/common/uniformdh"
 	"gitlab.com/yawning/obfs4.git/transports/base"
@@ -69,13 +70,13 @@ func (t *Transport) Name() string {
 }
 
 // ClientFactory returns a new obfs3ClientFactory instance.
-func (t *Transport) ClientFactory(stateDir string) (base.ClientFactory, error) {
+func (t *Transport) ClientFactory(_ string) (base.ClientFactory, error) {
 	cf := &obfs3ClientFactory{transport: t}
 	return cf, nil
 }
 
 // ServerFactory returns a new obfs3ServerFactory instance.
-func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFactory, error) {
+func (t *Transport) ServerFactory(_ string, _ *pt.Args) (base.ServerFactory, error) {
 	sf := &obfs3ServerFactory{transport: t}
 	return sf, nil
 }
@@ -88,11 +89,11 @@ func (cf *obfs3ClientFactory) Transport() base.Transport {
 	return cf.transport
 }
 
-func (cf *obfs3ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
-	return nil, nil
+func (cf *obfs3ClientFactory) ParseArgs(_ *pt.Args) (any, error) {
+	return nil, nil //nolint:nilnil
 }
 
-func (cf *obfs3ClientFactory) Dial(network, addr string, dialFn base.DialFunc, args interface{}) (net.Conn, error) {
+func (cf *obfs3ClientFactory) Dial(network, addr string, dialFn base.DialFunc, _ any) (net.Conn, error) {
 	conn, err := dialFn(network, addr)
 	if err != nil {
 		return nil, err
@@ -133,46 +134,46 @@ type obfs3Conn struct {
 	tx *cipher.StreamWriter
 }
 
-func newObfs3ClientConn(conn net.Conn) (c *obfs3Conn, err error) {
+func newObfs3ClientConn(conn net.Conn) (*obfs3Conn, error) {
 	// Initialize a client connection, and start the handshake timeout.
-	c = &obfs3Conn{conn, true, nil, nil, new(bytes.Buffer), nil, nil}
+	c := &obfs3Conn{conn, true, nil, nil, new(bytes.Buffer), nil, nil}
 	deadline := time.Now().Add(clientHandshakeTimeout)
-	if err = c.SetDeadline(deadline); err != nil {
+	if err := c.SetDeadline(deadline); err != nil {
 		return nil, err
 	}
 
 	// Handshake.
-	if err = c.handshake(); err != nil {
+	if err := c.handshake(); err != nil {
 		return nil, err
 	}
 
 	// Disarm the handshake timer.
-	if err = c.SetDeadline(time.Time{}); err != nil {
+	if err := c.SetDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
 
-	return
+	return c, nil
 }
 
-func newObfs3ServerConn(conn net.Conn) (c *obfs3Conn, err error) {
+func newObfs3ServerConn(conn net.Conn) (*obfs3Conn, error) {
 	// Initialize a server connection, and start the handshake timeout.
-	c = &obfs3Conn{conn, false, nil, nil, new(bytes.Buffer), nil, nil}
+	c := &obfs3Conn{conn, false, nil, nil, new(bytes.Buffer), nil, nil}
 	deadline := time.Now().Add(serverHandshakeTimeout)
-	if err = c.SetDeadline(deadline); err != nil {
+	if err := c.SetDeadline(deadline); err != nil {
 		return nil, err
 	}
 
 	// Handshake.
-	if err = c.handshake(); err != nil {
+	if err := c.handshake(); err != nil {
 		return nil, err
 	}
 
 	// Disarm the handshake timer.
-	if err = c.SetDeadline(time.Time{}); err != nil {
+	if err := c.SetDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
 
-	return
+	return c, nil
 }
 
 func (conn *obfs3Conn) handshake() error {
@@ -217,11 +218,7 @@ func (conn *obfs3Conn) handshake() error {
 	if err != nil {
 		return err
 	}
-	if err := conn.kdf(sharedSecret); err != nil {
-		return err
-	}
-
-	return nil
+	return conn.kdf(sharedSecret)
 }
 
 func (conn *obfs3Conn) kdf(sharedSecret []byte) error {
@@ -313,13 +310,13 @@ func (conn *obfs3Conn) findPeerMagic() error {
 	}
 }
 
-func (conn *obfs3Conn) Read(b []byte) (n int, err error) {
+func (conn *obfs3Conn) Read(b []byte) (int, error) {
 	// If this is the first time we read data post handshake, scan for the
 	// magic value.
 	if conn.rxMagic != nil {
-		if err = conn.findPeerMagic(); err != nil {
+		if err := conn.findPeerMagic(); err != nil {
 			conn.Close()
-			return
+			return 0, err
 		}
 		conn.rxMagic = nil
 	}
@@ -339,20 +336,20 @@ func (conn *obfs3Conn) Read(b []byte) (n int, err error) {
 	return conn.rx.Read(b)
 }
 
-func (conn *obfs3Conn) Write(b []byte) (n int, err error) {
+func (conn *obfs3Conn) Write(b []byte) (int, error) {
 	// If this is the first time we write data post handshake, send the
 	// padding/magic value.
 	if conn.txMagic != nil {
 		padLen := csrand.IntRange(0, maxPadding/2)
 		blob := make([]byte, padLen+len(conn.txMagic))
-		if err = csrand.Bytes(blob[:padLen]); err != nil {
+		if err := csrand.Bytes(blob[:padLen]); err != nil {
 			conn.Close()
-			return
+			return 0, err
 		}
 		copy(blob[padLen:], conn.txMagic)
-		if _, err = conn.Conn.Write(blob); err != nil {
+		if _, err := conn.Conn.Write(blob); err != nil {
 			conn.Close()
-			return
+			return 0, err
 		}
 		conn.txMagic = nil
 	}
@@ -360,7 +357,9 @@ func (conn *obfs3Conn) Write(b []byte) (n int, err error) {
 	return conn.tx.Write(b)
 }
 
-var _ base.ClientFactory = (*obfs3ClientFactory)(nil)
-var _ base.ServerFactory = (*obfs3ServerFactory)(nil)
-var _ base.Transport = (*Transport)(nil)
-var _ net.Conn = (*obfs3Conn)(nil)
+var (
+	_ base.ClientFactory = (*obfs3ClientFactory)(nil)
+	_ base.ServerFactory = (*obfs3ServerFactory)(nil)
+	_ base.Transport     = (*Transport)(nil)
+	_ net.Conn           = (*obfs3Conn)(nil)
+)

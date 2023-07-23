@@ -35,11 +35,11 @@ import (
 	"os"
 	"strconv"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 )
 
 // This file contains things that probably should be in goptlib but are not
-// yet or are not finalized.
+// yet or not exposed.
 
 func ptEnvError(msg string) error {
 	line := []byte(fmt.Sprintf("ENV-ERROR %s\n", msg))
@@ -47,89 +47,61 @@ func ptEnvError(msg string) error {
 	return errors.New(msg)
 }
 
-func ptProxyError(msg string) error {
-	line := []byte(fmt.Sprintf("PROXY-ERROR %s\n", msg))
-	_, _ = pt.Stdout.Write(line)
-	return errors.New(msg)
-}
-
-func ptProxyDone() {
-	line := []byte("PROXY DONE\n")
-	_, _ = pt.Stdout.Write(line)
-}
-
 func ptIsClient() (bool, error) {
 	clientEnv := os.Getenv("TOR_PT_CLIENT_TRANSPORTS")
 	serverEnv := os.Getenv("TOR_PT_SERVER_TRANSPORTS")
-	if clientEnv != "" && serverEnv != "" {
+	switch {
+	case clientEnv != "" && serverEnv != "":
 		return false, ptEnvError("TOR_PT_[CLIENT,SERVER]_TRANSPORTS both set")
-	} else if clientEnv != "" {
+	case clientEnv != "":
 		return true, nil
-	} else if serverEnv != "" {
+	case serverEnv != "":
 		return false, nil
 	}
 	return false, errors.New("not launched as a managed transport")
 }
 
-func ptGetProxy() (*url.URL, error) {
-	specString := os.Getenv("TOR_PT_PROXY")
-	if specString == "" {
-		return nil, nil
-	}
-	spec, err := url.Parse(specString)
-	if err != nil {
-		return nil, ptProxyError(fmt.Sprintf("failed to parse proxy config: %s", err))
+func ptGetProxy(info *pt.ClientInfo) (*url.URL, error) {
+	proxyURL := info.ProxyURL
+	if proxyURL == nil {
+		return nil, nil //nolint:nilnil
 	}
 
-	// Validate the TOR_PT_PROXY uri.
-	if !spec.IsAbs() {
-		return nil, ptProxyError("proxy URI is relative, must be absolute")
-	}
-	if spec.Path != "" {
-		return nil, ptProxyError("proxy URI has a path defined")
-	}
-	if spec.RawQuery != "" {
-		return nil, ptProxyError("proxy URI has a query defined")
-	}
-	if spec.Fragment != "" {
-		return nil, ptProxyError("proxy URI has a fragment defined")
-	}
-
-	switch spec.Scheme {
+	// Validate the arguments.
+	switch proxyURL.Scheme {
 	case "http":
 		// The most forgiving of proxies.
 
 	case "socks4a":
-		if spec.User != nil {
-			_, isSet := spec.User.Password()
+		if proxyURL.User != nil {
+			_, isSet := proxyURL.User.Password()
 			if isSet {
-				return nil, ptProxyError("proxy URI specified SOCKS4a and a password")
+				return nil, pt.ProxyError("proxy URI proxyURLified SOCKS4a and a password")
 			}
 		}
 
 	case "socks5":
-		if spec.User != nil {
+		if proxyURL.User != nil {
 			// UNAME/PASSWD both must be between 1 and 255 bytes long. (RFC1929)
-			user := spec.User.Username()
-			passwd, isSet := spec.User.Password()
+			user := proxyURL.User.Username()
+			passwd, isSet := proxyURL.User.Password()
 			if len(user) < 1 || len(user) > 255 {
-				return nil, ptProxyError("proxy URI specified a invalid SOCKS5 username")
+				return nil, pt.ProxyError("proxy URI proxyURLified a invalid SOCKS5 username")
 			}
 			if !isSet || len(passwd) < 1 || len(passwd) > 255 {
-				return nil, ptProxyError("proxy URI specified a invalid SOCKS5 password")
+				return nil, pt.ProxyError("proxy URI proxyURLified a invalid SOCKS5 password")
 			}
 		}
 
 	default:
-		return nil, ptProxyError(fmt.Sprintf("proxy URI has invalid scheme: %s", spec.Scheme))
+		return nil, pt.ProxyError(fmt.Sprintf("proxy URI has invalid scheme: %s", proxyURL.Scheme))
 	}
 
-	_, err = resolveAddrStr(spec.Host)
-	if err != nil {
-		return nil, ptProxyError(fmt.Sprintf("proxy URI has invalid host: %s", err))
+	if _, err := resolveAddrStr(proxyURL.Host); err != nil {
+		return nil, pt.ProxyError(fmt.Sprintf("proxy URI has invalid host: %s", err))
 	}
 
-	return spec, nil
+	return proxyURL, nil
 }
 
 // Sigh, pt.resolveAddr() isn't exported.  Include our own getto version that

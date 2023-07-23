@@ -35,7 +35,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	gourl "net/url"
@@ -44,7 +43,8 @@ import (
 	"sync"
 	"time"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+
 	"gitlab.com/yawning/obfs4.git/transports/base"
 )
 
@@ -83,8 +83,11 @@ func (ca *meekClientArgs) String() string {
 	return transportName + ":" + ca.front + ":" + ca.url.String()
 }
 
-func newClientArgs(args *pt.Args) (ca *meekClientArgs, err error) {
-	ca = &meekClientArgs{}
+func newClientArgs(args *pt.Args) (*meekClientArgs, error) {
+	var (
+		ca  meekClientArgs
+		err error
+	)
 
 	// Parse the URL argument.
 	str, ok := args.Get(urlArg)
@@ -104,7 +107,7 @@ func newClientArgs(args *pt.Args) (ca *meekClientArgs, err error) {
 	// Parse the (optional) front argument.
 	ca.front, _ = args.Get(frontArg)
 
-	return ca, nil
+	return &ca, nil
 }
 
 type meekConn struct {
@@ -119,18 +122,18 @@ type meekConn struct {
 	rdBuf           *bytes.Buffer
 }
 
-func (c *meekConn) Read(p []byte) (n int, err error) {
+func (c *meekConn) Read(p []byte) (int, error) {
 	// If there is data left over from the previous read,
 	// service the request using the buffered data.
 	if c.rdBuf != nil {
 		if c.rdBuf.Len() == 0 {
 			panic("empty read buffer")
 		}
-		n, err = c.rdBuf.Read(p)
+		n, err := c.rdBuf.Read(p)
 		if c.rdBuf.Len() == 0 {
 			c.rdBuf = nil
 		}
-		return
+		return n, err
 	}
 
 	// Wait for the worker to enqueue more incoming data.
@@ -142,16 +145,16 @@ func (c *meekConn) Read(p []byte) (n int, err error) {
 
 	// Ew, an extra copy, but who am I kidding, it's meek.
 	buf := bytes.NewBuffer(b)
-	n, err = buf.Read(p)
+	n, err := buf.Read(p)
 	if buf.Len() > 0 {
 		// If there's data pending, stash the buffer so the next
 		// Read() call will use it to fulfuill the Read().
 		c.rdBuf = buf
 	}
-	return
+	return n, err
 }
 
-func (c *meekConn) Write(b []byte) (n int, err error) {
+func (c *meekConn) Write(b []byte) (int, error) {
 	// Check to see if the connection is actually open.
 	select {
 	case <-c.workerCloseChan:
@@ -196,19 +199,19 @@ func (c *meekConn) RemoteAddr() net.Addr {
 	return c.args
 }
 
-func (c *meekConn) SetDeadline(t time.Time) error {
+func (c *meekConn) SetDeadline(_ time.Time) error {
 	return ErrNotSupported
 }
 
-func (c *meekConn) SetReadDeadline(t time.Time) error {
+func (c *meekConn) SetReadDeadline(_ time.Time) error {
 	return ErrNotSupported
 }
 
-func (c *meekConn) SetWriteDeadline(t time.Time) error {
+func (c *meekConn) SetWriteDeadline(_ time.Time) error {
 	return ErrNotSupported
 }
 
-func (c *meekConn) enqueueWrite(b []byte) (ok bool) {
+func (c *meekConn) enqueueWrite(b []byte) (ok bool) { //nolint:nonamedreturns
 	defer func() {
 		if err := recover(); err != nil {
 			ok = false
@@ -218,21 +221,26 @@ func (c *meekConn) enqueueWrite(b []byte) (ok bool) {
 	return true
 }
 
-func (c *meekConn) roundTrip(sndBuf []byte) (recvBuf []byte, err error) {
-	var req *http.Request
-	var resp *http.Response
+func (c *meekConn) roundTrip(sndBuf []byte) ([]byte, error) {
+	var (
+		req  *http.Request
+		resp *http.Response
+		err  error
+	)
+
+	url := *c.args.url
+	host := url.Host
+	if c.args.front != "" {
+		url.Host = c.args.front
+	}
+	urlStr := url.String()
 
 	for retries := 0; retries < maxRetries; retries++ {
-		url := *c.args.url
-		host := url.Host
-		if c.args.front != "" {
-			url.Host = c.args.front
-		}
 		var body io.Reader
 		if len(sndBuf) > 0 {
 			body = bytes.NewReader(sndBuf)
 		}
-		req, err = http.NewRequest("POST", url.String(), body)
+		req, err = http.NewRequest(http.MethodPost, urlStr, body)
 		if err != nil {
 			return nil, err
 		}
@@ -248,16 +256,17 @@ func (c *meekConn) roundTrip(sndBuf []byte) (recvBuf []byte, err error) {
 		}
 
 		if resp.StatusCode == http.StatusOK {
-			recvBuf, err = ioutil.ReadAll(io.LimitReader(resp.Body, maxPayloadLength))
+			var recvBuf []byte
+			recvBuf, err = io.ReadAll(io.LimitReader(resp.Body, maxPayloadLength))
 			resp.Body.Close()
-			return
+			return recvBuf, err
 		}
 
 		resp.Body.Close()
 		err = fmt.Errorf("status code was %d, not %d", resp.StatusCode, http.StatusOK)
 		time.Sleep(retryDelay)
 	}
-	return
+	return nil, err
 }
 
 func (c *meekConn) ioWorker() {
@@ -305,19 +314,20 @@ loop:
 		}
 
 		// Determine the next poll interval.
-		if len(rdBuf) > 0 {
+		switch {
+		case len(rdBuf) > 0:
 			// Received data, enqueue the read.
 			c.workerRdChan <- rdBuf
 
 			// And poll immediately.
 			interval = 0
-		} else if wrSz > 0 {
+		case wrSz > 0:
 			// Sent data, poll immediately.
 			interval = 0
-		} else if interval == 0 {
+		case interval == 0:
 			// Neither sent nor received data after a poll, re-initialize the delay.
 			interval = initPollInterval
-		} else {
+		default:
 			// Apply a multiplicative backoff.
 			interval = time.Duration(float64(interval) * pollIntervalMultiplier)
 			if interval > maxPollInterval {
@@ -337,7 +347,7 @@ loop:
 	_ = c.Close()
 }
 
-func newMeekConn(network, addr string, dialFn base.DialFunc, ca *meekClientArgs) (net.Conn, error) {
+func newMeekConn(dialFn base.DialFunc, ca *meekClientArgs) (net.Conn, error) {
 	id, err := newSessionID()
 	if err != nil {
 		return nil, err

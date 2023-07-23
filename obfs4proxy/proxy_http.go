@@ -30,6 +30,7 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -69,14 +70,14 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 		return nil, err
 	}
 	conn := new(httpConn)
-	conn.httpConn = httputil.NewClientConn(c, nil) // nolint: staticcheck
+	conn.httpConn = httputil.NewClientConn(c, nil) //nolint:staticcheck
 	conn.remoteAddr, err = net.ResolveTCPAddr(network, addr)
 	if err != nil {
 		conn.httpConn.Close()
 		return nil, err
 	}
 
-	// HACK HACK HACK HACK.  http.ReadRequest also does this.
+	// HACK: http.ReadRequest also does this.
 	reqURL, err := url.Parse("http://" + addr)
 	if err != nil {
 		conn.httpConn.Close()
@@ -84,7 +85,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	}
 	reqURL.Scheme = ""
 
-	req, err := http.NewRequest("CONNECT", reqURL.String(), nil)
+	req, err := http.NewRequest(http.MethodConnect, reqURL.String(), nil)
 	if err != nil {
 		conn.httpConn.Close()
 		return nil, err
@@ -93,16 +94,16 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 	if s.haveAuth {
 		// SetBasicAuth doesn't quite do what is appropriate, because
 		// the correct header is `Proxy-Authorization`.
-		req.Header.Set("Proxy-Authorization", "Basic " + base64.StdEncoding.EncodeToString([]byte(s.username+":"+s.password)))
+		req.Header.Set("Proxy-Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s.username+":"+s.password)))
 	}
 	req.Header.Set("User-Agent", "")
 
 	resp, err := conn.httpConn.Do(req)
-	if err != nil && err != httputil.ErrPersistEOF { // nolint: staticcheck
+	if err != nil && !errors.Is(err, httputil.ErrPersistEOF) { //nolint:staticcheck
 		conn.httpConn.Close()
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		conn.httpConn.Close()
 		return nil, fmt.Errorf("proxy error: %s", resp.Status)
 	}
@@ -113,7 +114,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 
 type httpConn struct {
 	remoteAddr   *net.TCPAddr
-	httpConn     *httputil.ClientConn // nolint: staticcheck
+	httpConn     *httputil.ClientConn //nolint:staticcheck
 	hijackedConn net.Conn
 	staleReader  *bufio.Reader
 }
@@ -156,6 +157,6 @@ func (c *httpConn) SetWriteDeadline(t time.Time) error {
 	return c.hijackedConn.SetWriteDeadline(t)
 }
 
-func init() {
+func init() { //nolint:gochecknoinits
 	proxy.RegisterDialerType("http", newHTTP)
 }

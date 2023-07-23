@@ -30,8 +30,9 @@
 package log // import "gitlab.com/yawning/obfs4.git/common/log"
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -54,20 +55,22 @@ const (
 	LevelDebug
 )
 
-var logLevel = LevelInfo
-var enableLogging bool
-var unsafeLogging bool
+var (
+	logLevel      = LevelInfo
+	enableLogging bool
+	unsafeLogging bool
+)
 
 // Init initializes logging with the given path, and log safety options.
 func Init(enable bool, logFilePath string, unsafe bool) error {
 	if enable {
-		f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		if err != nil {
 			return err
 		}
 		log.SetOutput(f)
 	} else {
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	}
 	enableLogging = enable
 	unsafeLogging = unsafe
@@ -163,8 +166,8 @@ func ElideError(err error) string {
 
 	// If err is not a net.Error, just return the string representation,
 	// presumably transport authors know what they are doing.
-	netErr, ok := err.(net.Error)
-	if !ok {
+	var netErr net.Error
+	if !errors.As(err, &netErr) {
 		return err.Error()
 	}
 

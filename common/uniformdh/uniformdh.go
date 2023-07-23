@@ -32,6 +32,7 @@
 package uniformdh // import "gitlab.com/yawning/obfs4.git/common/uniformdh"
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math/big"
@@ -54,8 +55,16 @@ const (
 	g = 2
 )
 
-var modpGroup *big.Int
-var gen *big.Int
+var (
+	modpGroup = func() *big.Int {
+		n, ok := new(big.Int).SetString(modpStr, 16)
+		if !ok {
+			panic("Failed to load the RFC3526 MODP Group")
+		}
+		return n
+	}()
+	gen = big.NewInt(g)
+)
 
 // A PrivateKey represents a UniformDH private key.
 type PrivateKey struct {
@@ -70,14 +79,11 @@ type PublicKey struct {
 }
 
 // Bytes returns the byte representation of a PublicKey.
-func (pub *PublicKey) Bytes() (pubBytes []byte, err error) {
+func (pub *PublicKey) Bytes() ([]byte, error) {
 	if len(pub.bytes) != Size || pub.bytes == nil {
 		return nil, fmt.Errorf("public key is not initialized")
 	}
-	pubBytes = make([]byte, Size)
-	copy(pubBytes, pub.bytes)
-
-	return
+	return bytes.Clone(pub.bytes), nil
 }
 
 // SetBytes sets the PublicKey from a byte slice.
@@ -85,25 +91,22 @@ func (pub *PublicKey) SetBytes(pubBytes []byte) error {
 	if len(pubBytes) != Size {
 		return fmt.Errorf("public key length %d is not %d", len(pubBytes), Size)
 	}
-	pub.bytes = make([]byte, Size)
-	copy(pub.bytes, pubBytes)
+	pub.bytes = bytes.Clone(pubBytes)
 	pub.publicKey = new(big.Int).SetBytes(pub.bytes)
 
 	return nil
 }
 
 // GenerateKey generates a UniformDH keypair using the random source random.
-func GenerateKey(random io.Reader) (priv *PrivateKey, err error) {
-	privBytes := make([]byte, Size)
-	if _, err = io.ReadFull(random, privBytes); err != nil {
-		return
+func GenerateKey(random io.Reader) (*PrivateKey, error) {
+	var privBytes [Size]byte
+	if _, err := io.ReadFull(random, privBytes[:]); err != nil {
+		return nil, err
 	}
-	priv, err = generateKey(privBytes)
-
-	return
+	return generateKey(privBytes[:])
 }
 
-func generateKey(privBytes []byte) (priv *PrivateKey, err error) {
+func generateKey(privBytes []byte) (*PrivateKey, error) {
 	// This function does all of the actual heavy lifting of creating a public
 	// key from a raw 192 byte private key.  It is split so that the KAT tests
 	// can be written easily, and not exposed since non-ephemeral keys are a
@@ -132,52 +135,26 @@ func generateKey(privBytes []byte) (priv *PrivateKey, err error) {
 	// to the key so that it is always exactly Size bytes.
 	pubBytes := make([]byte, Size)
 	if wasEven {
-		err = prependZeroBytes(pubBytes, pubBn.Bytes())
+		pubBn.FillBytes(pubBytes)
 	} else {
-		err = prependZeroBytes(pubBytes, pubAlt.Bytes())
-	}
-	if err != nil {
-		return
+		pubAlt.FillBytes(pubBytes)
 	}
 
-	priv = new(PrivateKey)
+	priv := new(PrivateKey)
 	priv.PublicKey.bytes = pubBytes
 	priv.PublicKey.publicKey = pubBn
 	priv.privateKey = privBn
 
-	return
+	return priv, nil
 }
 
 // Handshake generates a shared secret given a PrivateKey and PublicKey.
-func Handshake(privateKey *PrivateKey, publicKey *PublicKey) (sharedSecret []byte, err error) {
+func Handshake(privateKey *PrivateKey, publicKey *PublicKey) ([]byte, error) {
 	// When a party wants to calculate the shared secret, she raises the
 	// foreign public key to her private key.
 	secretBn := new(big.Int).Exp(publicKey.publicKey, privateKey.privateKey, modpGroup)
-	sharedSecret = make([]byte, Size)
-	err = prependZeroBytes(sharedSecret, secretBn.Bytes())
+	sharedSecret := make([]byte, Size)
+	secretBn.FillBytes(sharedSecret)
 
-	return
-}
-
-func prependZeroBytes(dst, src []byte) error {
-	zeros := len(dst) - len(src)
-	if zeros < 0 {
-		return fmt.Errorf("src length is greater than destination: %d", zeros)
-	}
-	for i := 0; i < zeros; i++ {
-		dst[i] = 0
-	}
-	copy(dst[zeros:], src)
-
-	return nil
-}
-
-func init() {
-	// Load the MODP group and the generator.
-	var ok bool
-	modpGroup, ok = new(big.Int).SetString(modpStr, 16)
-	if !ok {
-		panic("Failed to load the RFC3526 MODP Group")
-	}
-	gen = big.NewInt(g)
+	return sharedSecret, nil
 }

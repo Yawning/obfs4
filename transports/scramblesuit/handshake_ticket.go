@@ -34,7 +34,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -56,9 +55,7 @@ const (
 	ticketMaxPadLength = 1388
 )
 
-var (
-	errInvalidTicket = errors.New("scramblesuit: invalid serialized ticket")
-)
+var errInvalidTicket = errors.New("scramblesuit: invalid serialized ticket")
 
 type ssTicketStore struct {
 	sync.Mutex
@@ -129,7 +126,7 @@ func (s *ssTicketStore) getTicket(addr net.Addr) (*ssTicket, error) {
 	}
 
 	// No ticket was found, that's fine.
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 func (s *ssTicketStore) serialize() error {
@@ -146,7 +143,7 @@ func (s *ssTicketStore) serialize() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(s.filePath, jsonStr, 0600)
+	return os.WriteFile(s.filePath, jsonStr, 0o600)
 }
 
 func loadTicketStore(stateDir string) (*ssTicketStore, error) {
@@ -154,7 +151,7 @@ func loadTicketStore(stateDir string) (*ssTicketStore, error) {
 	s := &ssTicketStore{filePath: fPath}
 	s.store = make(map[string]*ssTicket)
 
-	f, err := ioutil.ReadFile(fPath)
+	f, err := os.ReadFile(fPath)
 	if err != nil {
 		// No ticket store is fine.
 		if os.IsNotExist(err) {
@@ -167,7 +164,7 @@ func loadTicketStore(stateDir string) (*ssTicketStore, error) {
 
 	encMap := make(map[string]*ssTicketJSON)
 	if err = json.Unmarshal(f, &encMap); err != nil {
-		return nil, fmt.Errorf("failed to load ticket store '%s': '%s'", fPath, err)
+		return nil, fmt.Errorf("failed to load ticket store '%s': %w", fPath, err)
 	}
 	for k, v := range encMap {
 		raw, err := base32.StdEncoding.DecodeString(v.KeyTicket)

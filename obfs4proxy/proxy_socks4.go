@@ -150,7 +150,7 @@ func socks4ErrorToString(code byte) string {
 	case socks4Rejected:
 		return "request rejected or failed"
 	case socks4RejectedIdentdFailed:
-		return "request rejected becasue SOCKS server cannot connect to identd on the client"
+		return "request rejected because SOCKS server cannot connect to identd on the client"
 	case socks4RejectedIdentdMismatch:
 		return "request rejected because the client program and identd report different user-ids"
 	default:
@@ -158,7 +158,7 @@ func socks4ErrorToString(code byte) string {
 	}
 }
 
-func init() {
+func init() { //nolint:gochecknoinits
 	// Despite the scheme name, this really is SOCKS4.
 	proxy.RegisterDialerType("socks4a", newSOCKS4)
 }

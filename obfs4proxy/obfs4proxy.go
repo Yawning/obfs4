@@ -41,12 +41,13 @@ import (
 	"sync"
 	"syscall"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+	"golang.org/x/net/proxy"
+
 	"gitlab.com/yawning/obfs4.git/common/log"
 	"gitlab.com/yawning/obfs4.git/common/socks5"
 	"gitlab.com/yawning/obfs4.git/transports"
 	"gitlab.com/yawning/obfs4.git/transports/base"
-	"golang.org/x/net/proxy"
 )
 
 const (
@@ -55,23 +56,27 @@ const (
 	socksAddr         = "127.0.0.1:0"
 )
 
-var stateDir string
-var termMon *termMonitor
+var (
+	stateDir string
+	termMon  *termMonitor
+)
 
-func clientSetup() (launched bool, listeners []net.Listener) {
+func clientSetup() (bool, []net.Listener) {
 	ptClientInfo, err := pt.ClientSetup(transports.Transports())
 	if err != nil {
 		golog.Fatal(err)
 	}
 
-	ptClientProxy, err := ptGetProxy()
+	ptClientProxy, err := ptGetProxy(&ptClientInfo)
 	if err != nil {
 		golog.Fatal(err)
 	} else if ptClientProxy != nil {
-		ptProxyDone()
+		pt.ProxyDone()
 	}
 
 	// Launch each of the client listeners.
+	var launched bool
+	listeners := make([]net.Listener, 0, len(ptClientInfo.MethodNames))
 	for _, name := range ptClientInfo.MethodNames {
 		t := transports.Get(name)
 		if t == nil {
@@ -103,7 +108,7 @@ func clientSetup() (launched bool, listeners []net.Listener) {
 	}
 	pt.CmethodsDone()
 
-	return
+	return launched, listeners
 }
 
 func clientAcceptLoop(f base.ClientFactory, ln net.Listener, proxyURI *url.URL) error {
@@ -111,10 +116,7 @@ func clientAcceptLoop(f base.ClientFactory, ln net.Listener, proxyURI *url.URL) 
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				return err
-			}
-			continue
+			return err
 		}
 		go clientHandler(f, conn, proxyURI)
 	}
@@ -176,12 +178,14 @@ func clientHandler(f base.ClientFactory, conn net.Conn, proxyURI *url.URL) {
 	}
 }
 
-func serverSetup() (launched bool, listeners []net.Listener) {
+func serverSetup() (bool, []net.Listener) {
 	ptServerInfo, err := pt.ServerSetup(transports.Transports())
 	if err != nil {
 		golog.Fatal(err)
 	}
 
+	var launched bool
+	listeners := make([]net.Listener, 0, len(ptServerInfo.Bindaddrs))
 	for _, bindaddr := range ptServerInfo.Bindaddrs {
 		name := bindaddr.MethodName
 		t := transports.Get(name)
@@ -218,7 +222,7 @@ func serverSetup() (launched bool, listeners []net.Listener) {
 	}
 	pt.SmethodsDone()
 
-	return
+	return launched, listeners
 }
 
 func serverAcceptLoop(f base.ServerFactory, ln net.Listener, info *pt.ServerInfo) error {
@@ -226,10 +230,7 @@ func serverAcceptLoop(f base.ServerFactory, ln net.Listener, info *pt.ServerInfo
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				return err
-			}
-			continue
+			return err
 		}
 		go serverHandler(f, conn, info)
 	}
@@ -317,7 +318,7 @@ func main() {
 	flag.Parse()
 
 	if *showVer {
-		fmt.Printf("%s\n", getVersion())
+		fmt.Printf("%s\n", getVersion()) //nolint:forbidigo
 		os.Exit(0)
 	}
 	if err := log.SetLogLevel(*logLevelStr); err != nil {

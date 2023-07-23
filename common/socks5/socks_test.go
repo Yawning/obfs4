@@ -48,11 +48,11 @@ type testReadWriter struct {
 	writeBuf bytes.Buffer
 }
 
-func (c *testReadWriter) Read(buf []byte) (n int, err error) {
+func (c *testReadWriter) Read(buf []byte) (int, error) {
 	return c.readBuf.Read(buf)
 }
 
-func (c *testReadWriter) Write(buf []byte) (n int, err error) {
+func (c *testReadWriter) Write(buf []byte) (int, error) {
 	return c.writeBuf.Write(buf)
 }
 
@@ -96,11 +96,11 @@ func TestAuthInvalidVersion(t *testing.T) {
 	// VER = 03, NMETHODS = 01, METHODS = [00]
 	c.writeHex("030100")
 	if _, err := req.negotiateAuth(); err == nil {
-		t.Error("negotiateAuth(InvalidVersion) succeded")
+		t.Error("negotiateAuth(InvalidVersion) succeeded")
 	}
 }
 
-// TestAuthInvalidNMethods tests auth negotiaton with no methods.
+// TestAuthInvalidNMethods tests auth negotiation with no methods.
 func TestAuthInvalidNMethods(t *testing.T) {
 	c := new(testReadWriter)
 	req := c.toRequest()
@@ -120,7 +120,7 @@ func TestAuthInvalidNMethods(t *testing.T) {
 	}
 }
 
-// TestAuthNoneRequired tests auth negotiaton with NO AUTHENTICATION REQUIRED.
+// TestAuthNoneRequired tests auth negotiation with NO AUTHENTICATION REQUIRED.
 func TestAuthNoneRequired(t *testing.T) {
 	c := new(testReadWriter)
 	req := c.toRequest()
@@ -230,7 +230,7 @@ func TestRFC1929InvalidVersion(t *testing.T) {
 	// VER = 03, ULEN = 5, UNAME = "ABCDE", PLEN = 5, PASSWD = "abcde"
 	c.writeHex("03054142434445056162636465")
 	if err := req.authenticate(authUsernamePassword); err == nil {
-		t.Error("authenticate(InvalidVersion) succeded")
+		t.Error("authenticate(InvalidVersion) succeeded")
 	}
 	if msg := c.readHex(); msg != "0101" {
 		t.Error("authenticate(InvalidVersion) invalid response:", msg)
@@ -245,7 +245,7 @@ func TestRFC1929InvalidUlen(t *testing.T) {
 	// VER = 01, ULEN = 0, UNAME = "", PLEN = 5, PASSWD = "abcde"
 	c.writeHex("0100056162636465")
 	if err := req.authenticate(authUsernamePassword); err == nil {
-		t.Error("authenticate(InvalidUlen) succeded")
+		t.Error("authenticate(InvalidUlen) succeeded")
 	}
 	if msg := c.readHex(); msg != "0101" {
 		t.Error("authenticate(InvalidUlen) invalid response:", msg)
@@ -260,7 +260,7 @@ func TestRFC1929InvalidPlen(t *testing.T) {
 	// VER = 01, ULEN = 5, UNAME = "ABCDE", PLEN = 0, PASSWD = ""
 	c.writeHex("0105414243444500")
 	if err := req.authenticate(authUsernamePassword); err == nil {
-		t.Error("authenticate(InvalidPlen) succeded")
+		t.Error("authenticate(InvalidPlen) succeeded")
 	}
 	if msg := c.readHex(); msg != "0101" {
 		t.Error("authenticate(InvalidPlen) invalid response:", msg)
@@ -275,7 +275,7 @@ func TestRFC1929InvalidPTArgs(t *testing.T) {
 	// VER = 01, ULEN = 5, UNAME = "ABCDE", PLEN = 5, PASSWD = "abcde"
 	c.writeHex("01054142434445056162636465")
 	if err := req.authenticate(authUsernamePassword); err == nil {
-		t.Error("authenticate(InvalidArgs) succeded")
+		t.Error("authenticate(InvalidArgs) succeeded")
 	}
 	if msg := c.readHex(); msg != "0101" {
 		t.Error("authenticate(InvalidArgs) invalid response:", msg)
@@ -301,7 +301,7 @@ func TestRFC1929Success(t *testing.T) {
 	}
 }
 
-// TestRequestInvalidHdr tests SOCKS5 requests with invalid VER/CMD/RSV/ATYPE
+// TestRequestInvalidHdr tests SOCKS5 requests with invalid VER/CMD/RSV/ATYPE.
 func TestRequestInvalidHdr(t *testing.T) {
 	c := new(testReadWriter)
 	req := c.toRequest()
@@ -309,7 +309,7 @@ func TestRequestInvalidHdr(t *testing.T) {
 	// VER = 03, CMD = 01, RSV = 00, ATYPE = 01, DST.ADDR = 127.0.0.1, DST.PORT = 9050
 	c.writeHex("030100017f000001235a")
 	if err := req.readCommand(); err == nil {
-		t.Error("readCommand(InvalidVer) succeded")
+		t.Error("readCommand(InvalidVer) succeeded")
 	}
 	if msg := c.readHex(); msg != "05010001000000000000" {
 		t.Error("readCommand(InvalidVer) invalid response:", msg)
@@ -319,7 +319,7 @@ func TestRequestInvalidHdr(t *testing.T) {
 	// VER = 05, CMD = 05, RSV = 00, ATYPE = 01, DST.ADDR = 127.0.0.1, DST.PORT = 9050
 	c.writeHex("050500017f000001235a")
 	if err := req.readCommand(); err == nil {
-		t.Error("readCommand(InvalidCmd) succeded")
+		t.Error("readCommand(InvalidCmd) succeeded")
 	}
 	if msg := c.readHex(); msg != "05070001000000000000" {
 		t.Error("readCommand(InvalidCmd) invalid response:", msg)
@@ -329,7 +329,7 @@ func TestRequestInvalidHdr(t *testing.T) {
 	// VER = 05, CMD = 01, RSV = 30, ATYPE = 01, DST.ADDR = 127.0.0.1, DST.PORT = 9050
 	c.writeHex("050130017f000001235a")
 	if err := req.readCommand(); err == nil {
-		t.Error("readCommand(InvalidRsv) succeded")
+		t.Error("readCommand(InvalidRsv) succeeded")
 	}
 	if msg := c.readHex(); msg != "05010001000000000000" {
 		t.Error("readCommand(InvalidRsv) invalid response:", msg)
@@ -339,7 +339,7 @@ func TestRequestInvalidHdr(t *testing.T) {
 	// VER = 05, CMD = 01, RSV = 01, ATYPE = 05, DST.ADDR = 127.0.0.1, DST.PORT = 9050
 	c.writeHex("050100057f000001235a")
 	if err := req.readCommand(); err == nil {
-		t.Error("readCommand(InvalidAtype) succeded")
+		t.Error("readCommand(InvalidAtype) succeeded")
 	}
 	if msg := c.readHex(); msg != "05080001000000000000" {
 		t.Error("readCommand(InvalidAtype) invalid response:", msg)

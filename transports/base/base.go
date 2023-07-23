@@ -32,7 +32,7 @@ package base // import "gitlab.com/yawning/obfs4.git/transports/base"
 import (
 	"net"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 )
 
 type DialFunc func(string, string) (net.Conn, error)
@@ -48,12 +48,12 @@ type ClientFactory interface {
 	// for use with WrapConn.  This routine is called before the outgoing
 	// TCP/IP connection is created to allow doing things (like keypair
 	// generation) to be hidden from third parties.
-	ParseArgs(args *pt.Args) (interface{}, error)
+	ParseArgs(args *pt.Args) (any, error)
 
 	// Dial creates an outbound net.Conn, and does whatever is required
 	// (eg: handshaking) to get the connection to the point where it is
 	// ready to relay data.
-	Dial(network, address string, dialFn DialFunc, args interface{}) (net.Conn, error)
+	Dial(network, address string, dialFn DialFunc, args any) (net.Conn, error)
 }
 
 // ServerFactory is the interface that defines the factory for creating

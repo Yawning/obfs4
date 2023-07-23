@@ -30,6 +30,7 @@ package framing
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"testing"
 )
 
@@ -89,7 +90,9 @@ func TestEncoder_Encode_Oversize(t *testing.T) {
 	var buf [MaximumFramePayloadLength + 1]byte
 	_, _ = rand.Read(buf[:]) // YOLO
 	_, err := encoder.Encode(frame[:], buf[:])
-	if _, ok := err.(InvalidPayloadLengthError); !ok {
+
+	var payloadErr InvalidPayloadLengthError
+	if !errors.As(err, &payloadErr) {
 		t.Error("Encoder.encode() returned unexpected error:", err)
 	}
 }
@@ -150,7 +153,7 @@ func BenchmarkEncoder_Encode(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		transfered := 0
+		var xfered int
 		buffer := bytes.NewBuffer(payload)
 		for 0 < buffer.Len() {
 			n, err := buffer.Read(chopBuf[:])
@@ -159,11 +162,10 @@ func BenchmarkEncoder_Encode(b *testing.B) {
 			}
 
 			n, _ = encoder.Encode(frame[:], chopBuf[:n])
-			transfered += n - FrameOverhead
+			xfered += n - FrameOverhead
 		}
-		if transfered != len(payload) {
-			b.Fatalf("Transfered length mismatch: %d != %d", transfered,
-				len(payload))
+		if xfered != len(payload) {
+			b.Fatalf("Xfered length mismatch: %d != %d", xfered, len(payload))
 		}
 	}
 }

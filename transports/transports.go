@@ -41,8 +41,10 @@ import (
 	"gitlab.com/yawning/obfs4.git/transports/scramblesuit"
 )
 
-var transportMapLock sync.Mutex
-var transportMap map[string]base.Transport = make(map[string]base.Transport)
+var (
+	transportMapLock sync.Mutex
+	transportMap     map[string]base.Transport = make(map[string]base.Transport)
+)
 
 // Register registers a transport protocol.
 func Register(transport base.Transport) error {
@@ -64,7 +66,7 @@ func Transports() []string {
 	transportMapLock.Lock()
 	defer transportMapLock.Unlock()
 
-	var ret []string
+	ret := make([]string, 0, len(transportMap))
 	for name := range transportMap {
 		ret = append(ret, name)
 	}

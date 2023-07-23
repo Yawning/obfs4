@@ -28,7 +28,6 @@
 package probdist
 
 import (
-	"fmt"
 	"testing"
 
 	"gitlab.com/yawning/obfs4.git/common/drbg"
@@ -49,7 +48,7 @@ func TestWeightedDist(t *testing.T) {
 	w := New(seed, 0, 999, true)
 	if debug {
 		// Dump a string representation of the probability table.
-		fmt.Println("Table:")
+		t.Logf("Table:")
 		var sum float64
 		for _, weight := range w.weights {
 			sum += weight
@@ -57,10 +56,9 @@ func TestWeightedDist(t *testing.T) {
 		for i, weight := range w.weights {
 			p := weight / sum
 			if p > 0.000001 { // Filter out tiny values.
-				fmt.Printf(" [%d]: %f\n", w.minValue+w.values[i], p)
+				t.Logf(" [%d]: %f", w.minValue+w.values[i], p)
 			}
 		}
-		fmt.Println()
 	}
 
 	for i := 0; i < nrTrials; i++ {
@@ -69,11 +67,11 @@ func TestWeightedDist(t *testing.T) {
 	}
 
 	if debug {
-		fmt.Println("Generated:")
+		t.Logf("Generated:")
 		for value, count := range hist {
 			if count != 0 {
 				p := float64(count) / float64(nrTrials)
-				fmt.Printf(" [%d]: %f (%d)\n", value, p, count)
+				t.Logf(" [%d]: %f (%d)", value, p, count)
 			}
 		}
 	}

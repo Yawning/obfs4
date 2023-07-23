@@ -29,7 +29,6 @@ package main
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"runtime"
@@ -73,7 +72,7 @@ func (m *termMonitor) wait(termOnNoHandlers bool) os.Signal {
 }
 
 func (m *termMonitor) termOnStdinClose() {
-	_, err := io.Copy(ioutil.Discard, os.Stdin)
+	_, err := io.Copy(io.Discard, os.Stdin)
 
 	// io.Copy() will return a nil on EOF, since reaching EOF is
 	// expected behavior.  No matter what, if this unblocks, assume
@@ -103,9 +102,9 @@ func (m *termMonitor) termOnPPIDChange(ppid int) {
 	m.sigChan <- syscall.SIGTERM
 }
 
-func newTermMonitor() (m *termMonitor) {
+func newTermMonitor() *termMonitor {
 	ppid := os.Getppid()
-	m = new(termMonitor)
+	m := new(termMonitor)
 	m.sigChan = make(chan os.Signal)
 	m.handlerChan = make(chan int)
 	signal.Notify(m.sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -113,7 +112,7 @@ func newTermMonitor() (m *termMonitor) {
 	// If tor supports feature #15435, we can use Stdin being closed as an
 	// indication that tor has died, or wants the PT to shutdown for any
 	// reason.
-	if ptShouldExitOnStdinClose() {
+	if ptShouldExitOnStdinClose() { //nolint:nestif
 		go m.termOnStdinClose()
 	} else {
 		// Instead of feature #15435, use various kludges and hacks:
@@ -124,12 +123,12 @@ func newTermMonitor() (m *termMonitor) {
 			// Errors here are non-fatal, since it might still be
 			// possible to fall back to a generic implementation.
 			if err := termMonitorOSInit(m); err == nil {
-				return
+				return m
 			}
 		}
 		if runtime.GOOS != "windows" {
 			go m.termOnPPIDChange(ppid)
 		}
 	}
-	return
+	return m
 }

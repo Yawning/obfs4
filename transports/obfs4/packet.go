@@ -30,6 +30,7 @@ package obfs4
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 
@@ -52,7 +53,7 @@ const (
 )
 
 // InvalidPacketLengthError is the error returned when decodePacket detects a
-// invalid packet length/
+// invalid packet length.
 type InvalidPacketLengthError int
 
 func (e InvalidPacketLengthError) Error() string {
@@ -85,7 +86,7 @@ func (conn *obfs4Conn) makePacket(w io.Writer, pktType uint8, data []byte, padLe
 	pkt[0] = pktType
 	binary.BigEndian.PutUint16(pkt[1:], uint16(len(data)))
 	if len(data) > 0 {
-		copy(pkt[3:], data[:])
+		copy(pkt[3:], data)
 	}
 	copy(pkt[3+len(data):], zeroPadBytes[:padLen])
 
@@ -108,23 +109,28 @@ func (conn *obfs4Conn) makePacket(w io.Writer, pktType uint8, data []byte, padLe
 	return nil
 }
 
-func (conn *obfs4Conn) readPackets() (err error) {
+func (conn *obfs4Conn) readPackets() error {
 	// Attempt to read off the network.
 	rdLen, rdErr := conn.Conn.Read(conn.readBuffer)
 	conn.receiveBuffer.Write(conn.readBuffer[:rdLen])
 
-	var decoded [framing.MaximumFramePayloadLength]byte
+	var (
+		decoded [framing.MaximumFramePayloadLength]byte
+		err     error
+	)
+bufferLoop:
 	for conn.receiveBuffer.Len() > 0 {
 		// Decrypt an AEAD frame.
-		decLen := 0
+		var decLen int
 		decLen, err = conn.decoder.Decode(decoded[:], conn.receiveBuffer)
-		if err == framing.ErrAgain {
-			break
-		} else if err != nil {
-			break
-		} else if decLen < packetOverhead {
+		switch {
+		case errors.Is(err, framing.ErrAgain):
+			break bufferLoop
+		case err != nil:
+			break bufferLoop
+		case decLen < packetOverhead:
 			err = InvalidPacketLengthError(decLen)
-			break
+			break bufferLoop
 		}
 
 		// Decode the packet.
@@ -171,5 +177,5 @@ func (conn *obfs4Conn) readPackets() (err error) {
 		return rdErr
 	}
 
-	return
+	return err
 }

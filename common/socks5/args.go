@@ -29,7 +29,8 @@ package socks5
 
 import (
 	"fmt"
-	"git.torproject.org/pluggable-transports/goptlib.git"
+
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 )
 
 // parseClientParameters takes a client parameter string formatted according to
@@ -37,14 +38,14 @@ import (
 // specification, and returns it as a goptlib Args structure.
 //
 // This is functionally identical to the equivalently named goptlib routine.
-func parseClientParameters(argStr string) (args pt.Args, err error) {
-	args = make(pt.Args)
+func parseClientParameters(argStr string) (pt.Args, error) {
+	args := make(pt.Args)
 	if len(argStr) == 0 {
-		return
+		return args, nil
 	}
 
 	var key string
-	var acc []byte
+	acc := make([]byte, 0, len(argStr))
 	prevIsEscape := false
 	for idx, ch := range []byte(argStr) {
 		switch ch {

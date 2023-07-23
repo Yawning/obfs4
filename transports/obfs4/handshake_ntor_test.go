@@ -115,7 +115,7 @@ func TestHandshakeNtorClient(t *testing.T) {
 	serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
 	if err == nil {
-		t.Fatalf("serverHandshake.parseClientHandshake() succeded (oversized)")
+		t.Fatalf("serverHandshake.parseClientHandshake() succeeded (oversized)")
 	}
 
 	// Test undersized client padding.
@@ -127,7 +127,7 @@ func TestHandshakeNtorClient(t *testing.T) {
 	serverHs = newServerHandshake(nodeID, idKeypair, serverKeypair)
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
 	if err == nil {
-		t.Fatalf("serverHandshake.parseClientHandshake() succeded (undersized)")
+		t.Fatalf("serverHandshake.parseClientHandshake() succeeded (undersized)")
 	}
 }
 
@@ -204,7 +204,7 @@ func TestHandshakeNtorServer(t *testing.T) {
 	serverHs := newServerHandshake(nodeID, idKeypair, serverKeypair)
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
 	if err == nil {
-		t.Fatalf("serverHandshake.parseClientHandshake() succeded (oversized)")
+		t.Fatalf("serverHandshake.parseClientHandshake() succeeded (oversized)")
 	}
 
 	// Test undersized client padding.
@@ -216,7 +216,7 @@ func TestHandshakeNtorServer(t *testing.T) {
 	serverHs = newServerHandshake(nodeID, idKeypair, serverKeypair)
 	_, err = serverHs.parseClientHandshake(serverFilter, clientBlob)
 	if err == nil {
-		t.Fatalf("serverHandshake.parseClientHandshake() succeded (undersized)")
+		t.Fatalf("serverHandshake.parseClientHandshake() succeeded (undersized)")
 	}
 
 	// Test oversized server padding.
@@ -243,6 +243,6 @@ func TestHandshakeNtorServer(t *testing.T) {
 	}
 	_, _, err = clientHs.parseServerHandshake(serverBlob)
 	if err == nil {
-		t.Fatalf("clientHandshake.parseServerHandshake() succeded (oversized)")
+		t.Fatalf("clientHandshake.parseServerHandshake() succeeded (oversized)")
 	}
 }

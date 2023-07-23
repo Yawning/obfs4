@@ -28,16 +28,17 @@
 package obfs4
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+
 	"gitlab.com/yawning/obfs4.git/common/csrand"
 	"gitlab.com/yawning/obfs4.git/common/drbg"
 	"gitlab.com/yawning/obfs4.git/common/ntor"
@@ -81,7 +82,7 @@ func (cert *obfs4ServerCert) unpack() (*ntor.NodeID, *ntor.PublicKey) {
 func serverCertFromString(encoded string) (*obfs4ServerCert, error) {
 	decoded, err := base64.StdEncoding.DecodeString(encoded + certSuffix)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode cert: %s", err)
+		return nil, fmt.Errorf("failed to decode cert: %w", err)
 	}
 
 	if len(decoded) != certLength {
@@ -93,7 +94,10 @@ func serverCertFromString(encoded string) (*obfs4ServerCert, error) {
 
 func serverCertFromState(st *obfs4ServerState) *obfs4ServerCert {
 	cert := new(obfs4ServerCert)
-	cert.raw = append(st.nodeID.Bytes()[:], st.identityKey.Public().Bytes()[:]...)
+
+	cert.raw = bytes.Clone(st.nodeID.Bytes()[:])
+	cert.raw = append(cert.raw, st.identityKey.Public().Bytes()[:]...)
+
 	return cert
 }
 
@@ -121,15 +125,16 @@ func serverStateFromArgs(stateDir string, args *pt.Args) (*obfs4ServerState, err
 
 	// Either a private key, node id, and seed are ALL specified, or
 	// they should be loaded from the state file.
-	if !privKeyOk && !nodeIDOk && !seedOk {
+	switch {
+	case !privKeyOk && !nodeIDOk && !seedOk:
 		if err := jsonServerStateFromFile(stateDir, &js); err != nil {
 			return nil, err
 		}
-	} else if !privKeyOk {
+	case !privKeyOk:
 		return nil, fmt.Errorf("missing argument '%s'", privateKeyArg)
-	} else if !nodeIDOk {
+	case !nodeIDOk:
 		return nil, fmt.Errorf("missing argument '%s'", nodeIDArg)
-	} else if !seedOk {
+	case !seedOk:
 		return nil, fmt.Errorf("missing argument '%s'", seedArg)
 	}
 
@@ -177,7 +182,7 @@ func serverStateFromJSONServerState(stateDir string, js *jsonServerState) (*obfs
 
 func jsonServerStateFromFile(stateDir string, js *jsonServerState) error {
 	fPath := path.Join(stateDir, stateFile)
-	f, err := ioutil.ReadFile(fPath)
+	f, err := os.ReadFile(fPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			if err = newJSONServerState(stateDir, js); err == nil {
@@ -188,27 +193,29 @@ func jsonServerStateFromFile(stateDir string, js *jsonServerState) error {
 	}
 
 	if err := json.Unmarshal(f, js); err != nil {
-		return fmt.Errorf("failed to load statefile '%s': %s", fPath, err)
+		return fmt.Errorf("failed to load statefile '%s': %w", fPath, err)
 	}
 
 	return nil
 }
 
-func newJSONServerState(stateDir string, js *jsonServerState) (err error) {
+func newJSONServerState(stateDir string, js *jsonServerState) error {
 	// Generate everything a server needs, using the cryptographic PRNG.
 	var st obfs4ServerState
 	rawID := make([]byte, ntor.NodeIDLength)
-	if err = csrand.Bytes(rawID); err != nil {
-		return
+	if err := csrand.Bytes(rawID); err != nil {
+		return err
 	}
+
+	var err error
 	if st.nodeID, err = ntor.NewNodeID(rawID); err != nil {
-		return
+		return err
 	}
 	if st.identityKey, err = ntor.NewKeypair(false); err != nil {
-		return
+		return err
 	}
 	if st.drbgSeed, err = drbg.NewSeed(); err != nil {
-		return
+		return err
 	}
 	st.iatMode = iatNone
 
@@ -228,11 +235,7 @@ func writeJSONServerState(stateDir string, js *jsonServerState) error {
 	if encoded, err = json.Marshal(js); err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(path.Join(stateDir, stateFile), encoded, 0600); err != nil {
-		return err
-	}
-
-	return nil
+	return os.WriteFile(path.Join(stateDir, stateFile), encoded, 0o600)
 }
 
 func newBridgeFile(stateDir string, st *obfs4ServerState) error {
@@ -252,9 +255,5 @@ func newBridgeFile(stateDir string, st *obfs4ServerState) error {
 		st.clientString())
 
 	tmp := []byte(prefix + bridgeLine)
-	if err := ioutil.WriteFile(path.Join(stateDir, bridgeFile), tmp, 0600); err != nil {
-		return err
-	}
-
-	return nil
+	return os.WriteFile(path.Join(stateDir, bridgeFile), tmp, 0o600)
 }

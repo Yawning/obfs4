@@ -33,7 +33,8 @@ import (
 	"fmt"
 	"net"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+
 	"gitlab.com/yawning/obfs4.git/transports/base"
 )
 
@@ -58,8 +59,7 @@ func (t *Transport) ClientFactory(stateDir string) (base.ClientFactory, error) {
 }
 
 // ServerFactory will one day return a new ssServerFactory instance.
-func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFactory, error) {
-	// TODO: Fill this in eventually, though obfs4 is better.
+func (t *Transport) ServerFactory(_ string, _ *pt.Args) (base.ServerFactory, error) {
 	return nil, fmt.Errorf("server not supported")
 }
 
@@ -72,11 +72,11 @@ func (cf *ssClientFactory) Transport() base.Transport {
 	return cf.transport
 }
 
-func (cf *ssClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
+func (cf *ssClientFactory) ParseArgs(args *pt.Args) (any, error) {
 	return newClientArgs(args)
 }
 
-func (cf *ssClientFactory) Dial(network, addr string, dialFn base.DialFunc, args interface{}) (net.Conn, error) {
+func (cf *ssClientFactory) Dial(network, addr string, dialFn base.DialFunc, args any) (net.Conn, error) {
 	// Validate args before opening outgoing connection.
 	ca, ok := args.(*ssClientArgs)
 	if !ok {
@@ -95,5 +95,7 @@ func (cf *ssClientFactory) Dial(network, addr string, dialFn base.DialFunc, args
 	return conn, nil
 }
 
-var _ base.ClientFactory = (*ssClientFactory)(nil)
-var _ base.Transport = (*Transport)(nil)
+var (
+	_ base.ClientFactory = (*ssClientFactory)(nil)
+	_ base.Transport     = (*Transport)(nil)
+)

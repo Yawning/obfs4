@@ -64,8 +64,8 @@ type WeightedDist struct {
 // based on a HashDrbg initialized with seed.  Optionally, bias the weight
 // generation to match the ScrambleSuit non-uniform distribution from
 // obfsproxy.
-func New(seed *drbg.Seed, min, max int, biased bool) (w *WeightedDist) {
-	w = &WeightedDist{minValue: min, maxValue: max, biased: biased}
+func New(seed *drbg.Seed, min, max int, biased bool) *WeightedDist {
+	w := &WeightedDist{minValue: min, maxValue: max, biased: biased}
 
 	if max <= min {
 		panic(fmt.Sprintf("wDist.Reset(): min >= max (%d, %d)", min, max))
@@ -73,7 +73,7 @@ func New(seed *drbg.Seed, min, max int, biased bool) (w *WeightedDist) {
 
 	w.Reset(seed)
 
-	return
+	return w
 }
 
 // genValues creates a slice containing a random number of random values
@@ -132,7 +132,7 @@ func (w *WeightedDist) genTables() {
 	scaled := make([]float64, n)
 	for i, weight := range w.weights {
 		// Multiply each probability by $n$.
-		p_i := weight * float64(n) / sum
+		p_i := weight * float64(n) / sum //nolint:revive
 		scaled[i] = p_i
 
 		// For each scaled probability $p_i$:
@@ -148,9 +148,9 @@ func (w *WeightedDist) genTables() {
 	// While $Small$ and $Large$ are not empty: ($Large$ might be emptied first)
 	for small.Len() > 0 && large.Len() > 0 {
 		// Remove the first element from $Small$; call it $l$.
-		l := small.Remove(small.Front()).(int)
+		l, _ := small.Remove(small.Front()).(int)
 		// Remove the first element from $Large$; call it $g$.
-		g := large.Remove(large.Front()).(int)
+		g, _ := large.Remove(large.Front()).(int)
 
 		// Set $Prob[l] = p_l$.
 		prob[l] = scaled[l]
@@ -172,7 +172,7 @@ func (w *WeightedDist) genTables() {
 	// While $Large$ is not empty:
 	for large.Len() > 0 {
 		// Remove the first element from $Large$; call it $g$.
-		g := large.Remove(large.Front()).(int)
+		g, _ := large.Remove(large.Front()).(int)
 		// Set $Prob[g] = 1$.
 		prob[g] = 1.0
 	}
@@ -180,7 +180,7 @@ func (w *WeightedDist) genTables() {
 	// While $Small$ is not empty: This is only possible due to numerical instability.
 	for small.Len() > 0 {
 		// Remove the first element from $Small$; call it $l$.
-		l := small.Remove(small.Front()).(int)
+		l, _ := small.Remove(small.Front()).(int)
 		// Set $Prob[l] = 1$.
 		prob[l] = 1.0
 	}
@@ -194,7 +194,7 @@ func (w *WeightedDist) genTables() {
 func (w *WeightedDist) Reset(seed *drbg.Seed) {
 	// Initialize the deterministic random number generator.
 	drbg, _ := drbg.NewHashDrbg(seed)
-	rng := rand.New(drbg)
+	rng := rand.New(drbg) //nolint:gosec
 
 	w.Lock()
 	defer w.Unlock()

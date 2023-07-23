@@ -30,23 +30,24 @@
 // 1929.
 //
 // Notes:
-//  * GSSAPI authentication, is NOT supported.
-//  * Only the CONNECT command is supported.
-//  * The authentication provided by the client is always accepted as it is
-//    used as a channel to pass information rather than for authentication for
-//    pluggable transports.
+//   - GSSAPI authentication, is NOT supported.
+//   - Only the CONNECT command is supported.
+//   - The authentication provided by the client is always accepted as it is
+//     used as a channel to pass information rather than for authentication for
+//     pluggable transports.
 package socks5 // import "gitlab.com/yawning/obfs4.git/common/socks5"
 
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"syscall"
 	"time"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 )
 
 const (
@@ -89,16 +90,16 @@ func Version() string {
 
 // ErrorToReplyCode converts an error to the "best" reply code.
 func ErrorToReplyCode(err error) ReplyCode {
-	opErr, ok := err.(*net.OpError)
-	if !ok {
+	var opErr *net.OpError
+	if !errors.As(err, &opErr) {
 		return ReplyGeneralFailure
 	}
 
-	errno, ok := opErr.Err.(syscall.Errno)
-	if !ok {
+	var errno syscall.Errno
+	if !errors.As(opErr.Err, &errno) {
 		return ReplyGeneralFailure
 	}
-	switch errno {
+	switch errno { //nolint:exhaustive
 	case syscall.EADDRNOTAVAIL:
 		return ReplyAddressNotSupported
 	case syscall.ETIMEDOUT:
@@ -307,7 +308,7 @@ func (req *Request) readCommand() error {
 			return err
 		}
 		addr := make(net.IP, net.IPv6len)
-		copy(addr[:], rawAddr[:])
+		copy(addr[:], rawAddr)
 		host = fmt.Sprintf("[%s]", addr.String())
 	default:
 		_ = req.Reply(ReplyAddressNotSupported)

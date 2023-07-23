@@ -40,7 +40,8 @@ import (
 	"net"
 	"time"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+
 	"gitlab.com/yawning/obfs4.git/common/csrand"
 	"gitlab.com/yawning/obfs4.git/transports/base"
 )
@@ -81,13 +82,13 @@ func (t *Transport) Name() string {
 }
 
 // ClientFactory returns a new obfs2ClientFactory instance.
-func (t *Transport) ClientFactory(stateDir string) (base.ClientFactory, error) {
+func (t *Transport) ClientFactory(_ string) (base.ClientFactory, error) {
 	cf := &obfs2ClientFactory{transport: t}
 	return cf, nil
 }
 
 // ServerFactory returns a new obfs2ServerFactory instance.
-func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFactory, error) {
+func (t *Transport) ServerFactory(_ string, args *pt.Args) (base.ServerFactory, error) {
 	if err := validateArgs(args); err != nil {
 		return nil, err
 	}
@@ -104,11 +105,11 @@ func (cf *obfs2ClientFactory) Transport() base.Transport {
 	return cf.transport
 }
 
-func (cf *obfs2ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
+func (cf *obfs2ClientFactory) ParseArgs(args *pt.Args) (any, error) {
 	return nil, validateArgs(args)
 }
 
-func (cf *obfs2ClientFactory) Dial(network, addr string, dialFn base.DialFunc, args interface{}) (net.Conn, error) {
+func (cf *obfs2ClientFactory) Dial(network, addr string, dialFn base.DialFunc, _ any) (net.Conn, error) {
 	conn, err := dialFn(network, addr)
 	if err != nil {
 		return nil, err
@@ -154,46 +155,46 @@ func (conn *obfs2Conn) Write(b []byte) (int, error) {
 	return conn.tx.Write(b)
 }
 
-func newObfs2ClientConn(conn net.Conn) (c *obfs2Conn, err error) {
+func newObfs2ClientConn(conn net.Conn) (*obfs2Conn, error) {
 	// Initialize a client connection, and start the handshake timeout.
-	c = &obfs2Conn{conn, true, nil, nil}
+	c := &obfs2Conn{conn, true, nil, nil}
 	deadline := time.Now().Add(clientHandshakeTimeout)
-	if err = c.SetDeadline(deadline); err != nil {
+	if err := c.SetDeadline(deadline); err != nil {
 		return nil, err
 	}
 
 	// Handshake.
-	if err = c.handshake(); err != nil {
+	if err := c.handshake(); err != nil {
 		return nil, err
 	}
 
 	// Disarm the handshake timer.
-	if err = c.SetDeadline(time.Time{}); err != nil {
+	if err := c.SetDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
 
-	return
+	return c, nil
 }
 
-func newObfs2ServerConn(conn net.Conn) (c *obfs2Conn, err error) {
+func newObfs2ServerConn(conn net.Conn) (*obfs2Conn, error) {
 	// Initialize a server connection, and start the handshake timeout.
-	c = &obfs2Conn{conn, false, nil, nil}
+	c := &obfs2Conn{conn, false, nil, nil}
 	deadline := time.Now().Add(serverHandshakeTimeout)
-	if err = c.SetDeadline(deadline); err != nil {
+	if err := c.SetDeadline(deadline); err != nil {
 		return nil, err
 	}
 
 	// Handshake.
-	if err = c.handshake(); err != nil {
+	if err := c.handshake(); err != nil {
 		return nil, err
 	}
 
 	// Disarm the handshake timer.
-	if err = c.SetDeadline(time.Time{}); err != nil {
+	if err := c.SetDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
 
-	return
+	return c, nil
 }
 
 func (conn *obfs2Conn) handshake() error {
@@ -220,7 +221,7 @@ func (conn *obfs2Conn) handshake() error {
 	} else {
 		padMagic = []byte(responderPadString)
 	}
-	padKey, padIV := hsKdf(padMagic, seed[:], conn.isInitiator)
+	padKey, padIV := hsKdf(padMagic, seed[:])
 	padLen := uint32(csrand.IntRange(0, maxPadding))
 
 	hsBlob := make([]byte, hsLen+padLen)
@@ -265,7 +266,7 @@ func (conn *obfs2Conn) handshake() error {
 	} else {
 		peerPadMagic = []byte(initiatorPadString)
 	}
-	peerKey, peerIV := hsKdf(peerPadMagic, peerSeed[:], !conn.isInitiator)
+	peerKey, peerIV := hsKdf(peerPadMagic, peerSeed[:])
 	rxBlock, err := aes.NewCipher(peerKey)
 	if err != nil {
 		return err
@@ -273,7 +274,7 @@ func (conn *obfs2Conn) handshake() error {
 	rxStream := cipher.NewCTR(rxBlock, peerIV)
 	conn.rx = &cipher.StreamReader{S: rxStream, R: conn.Conn}
 	hsHdr := make([]byte, hsLen)
-	if _, err := io.ReadFull(conn, hsHdr[:]); err != nil {
+	if _, err := io.ReadFull(conn, hsHdr); err != nil {
 		return err
 	}
 
@@ -296,11 +297,7 @@ func (conn *obfs2Conn) handshake() error {
 	}
 
 	// Derive the actual keys.
-	if err := conn.kdf(seed[:], peerSeed[:]); err != nil {
-		return err
-	}
-
-	return nil
+	return conn.kdf(seed[:], peerSeed[:])
 }
 
 func (conn *obfs2Conn) kdf(seed, peerSeed []byte) error {
@@ -321,14 +318,14 @@ func (conn *obfs2Conn) kdf(seed, peerSeed []byte) error {
 		combSeed = append(combSeed, seed...)
 	}
 
-	initKey, initIV := hsKdf([]byte(initiatorKdfString), combSeed, true)
+	initKey, initIV := hsKdf([]byte(initiatorKdfString), combSeed)
 	initBlock, err := aes.NewCipher(initKey)
 	if err != nil {
 		return err
 	}
 	initStream := cipher.NewCTR(initBlock, initIV)
 
-	respKey, respIV := hsKdf([]byte(responderKdfString), combSeed, false)
+	respKey, respIV := hsKdf([]byte(responderKdfString), combSeed)
 	respBlock, err := aes.NewCipher(respKey)
 	if err != nil {
 		return err
@@ -346,16 +343,16 @@ func (conn *obfs2Conn) kdf(seed, peerSeed []byte) error {
 	return nil
 }
 
-func hsKdf(magic, seed []byte, isInitiator bool) (padKey, padIV []byte) {
+func hsKdf(magic, seed []byte) ([]byte, []byte) {
 	// The actual key/IV is derived in the form of:
 	// m = MAC(magic, seed)
 	// KEY = m[:KEYLEN]
 	// IV = m[KEYLEN:]
 	m := mac(magic, seed)
-	padKey = m[:keyLen]
-	padIV = m[keyLen:]
+	padKey := m[:keyLen]
+	padIV := m[keyLen:]
 
-	return
+	return padKey, padIV
 }
 
 func mac(s, x []byte) []byte {
@@ -368,7 +365,9 @@ func mac(s, x []byte) []byte {
 	return h.Sum(nil)
 }
 
-var _ base.ClientFactory = (*obfs2ClientFactory)(nil)
-var _ base.ServerFactory = (*obfs2ServerFactory)(nil)
-var _ base.Transport = (*Transport)(nil)
-var _ net.Conn = (*obfs2Conn)(nil)
+var (
+	_ base.ClientFactory = (*obfs2ClientFactory)(nil)
+	_ base.ServerFactory = (*obfs2ServerFactory)(nil)
+	_ base.Transport     = (*Transport)(nil)
+	_ net.Conn           = (*obfs2Conn)(nil)
+)

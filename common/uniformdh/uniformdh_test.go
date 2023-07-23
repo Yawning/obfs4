@@ -101,7 +101,14 @@ const (
 		"a81359543e77e4a4cfa7598a4152e4c0"
 )
 
-var xPriv, xPub, yPriv, yPub, ss []byte
+var (
+	// Load the test vectors into byte slices.
+	xPriv, _ = hex.DecodeString(xPrivStr)
+	xPub, _  = hex.DecodeString(xPubStr)
+	yPriv, _ = hex.DecodeString(yPrivStr)
+	yPub, _  = hex.DecodeString(yPubStr)
+	ss, _    = hex.DecodeString(ssStr)
+)
 
 // TestGenerateKeyOdd tests creating a UniformDH keypair with a odd private
 // key.
@@ -137,7 +144,7 @@ func TestGenerateKeyEven(t *testing.T) {
 	}
 }
 
-// TestHandshake tests conductiong a UniformDH handshake with know values.
+// TestHandshake tests conducting a UniformDH handshake with know values.
 func TestHandshake(t *testing.T) {
 	xX, err := generateKey(xPriv)
 	if err != nil {
@@ -191,30 +198,5 @@ func BenchmarkHandshake(b *testing.B) {
 
 		_ = xY
 		_ = yX
-	}
-}
-
-func init() {
-	// Load the test vectors into byte slices.
-	var err error
-	xPriv, err = hex.DecodeString(xPrivStr)
-	if err != nil {
-		panic("hex.DecodeString(xPrivStr) failed")
-	}
-	xPub, err = hex.DecodeString(xPubStr)
-	if err != nil {
-		panic("hex.DecodeString(xPubStr) failed")
-	}
-	yPriv, err = hex.DecodeString(yPrivStr)
-	if err != nil {
-		panic("hex.DecodeString(yPrivStr) failed")
-	}
-	yPub, err = hex.DecodeString(yPubStr)
-	if err != nil {
-		panic("hex.DecodeString(yPubStr) failed")
-	}
-	ss, err = hex.DecodeString(ssStr)
-	if err != nil {
-		panic("hex.DecodeString(ssStr) failed")
 	}
 }

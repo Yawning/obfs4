@@ -30,12 +30,14 @@
 package drbg // import "gitlab.com/yawning/obfs4.git/common/drbg"
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"hash"
 
 	"github.com/dchest/siphash"
+
 	"gitlab.com/yawning/obfs4.git/common/csrand"
 )
 
@@ -60,33 +62,33 @@ func (seed *Seed) Hex() string {
 }
 
 // NewSeed returns a Seed initialized with the runtime CSPRNG.
-func NewSeed() (seed *Seed, err error) {
-	seed = new(Seed)
-	if err = csrand.Bytes(seed.Bytes()[:]); err != nil {
+func NewSeed() (*Seed, error) {
+	seed := new(Seed)
+	if err := csrand.Bytes(seed.Bytes()[:]); err != nil {
 		return nil, err
 	}
 
-	return
+	return seed, nil
 }
 
 // SeedFromBytes creates a Seed from the raw bytes, truncating to SeedLength as
 // appropriate.
-func SeedFromBytes(src []byte) (seed *Seed, err error) {
+func SeedFromBytes(src []byte) (*Seed, error) {
 	if len(src) < SeedLength {
 		return nil, InvalidSeedLengthError(len(src))
 	}
 
-	seed = new(Seed)
+	seed := new(Seed)
 	copy(seed.Bytes()[:], src)
 
-	return
+	return seed, nil
 }
 
 // SeedFromHex creates a Seed from the hexdecimal representation, truncating to
 // SeedLength as appropriate.
-func SeedFromHex(encoded string) (seed *Seed, err error) {
-	var raw []byte
-	if raw, err = hex.DecodeString(encoded); err != nil {
+func SeedFromHex(encoded string) (*Seed, error) {
+	raw, err := hex.DecodeString(encoded)
+	if err != nil {
 		return nil, err
 	}
 
@@ -133,7 +135,7 @@ func (drbg *HashDrbg) Int63() int64 {
 }
 
 // Seed does nothing, call NewHashDrbg if you want to reseed.
-func (drbg *HashDrbg) Seed(seed int64) {
+func (drbg *HashDrbg) Seed(_ int64) {
 	// No-op.
 }
 
@@ -142,7 +144,5 @@ func (drbg *HashDrbg) NextBlock() []byte {
 	_, _ = drbg.sip.Write(drbg.ofb[:])
 	copy(drbg.ofb[:], drbg.sip.Sum(nil))
 
-	ret := make([]byte, Size)
-	copy(ret, drbg.ofb[:])
-	return ret
+	return bytes.Clone(drbg.ofb[:])
 }

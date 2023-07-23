@@ -45,7 +45,7 @@ var (
 	csRandSourceInstance csRandSource
 
 	// Rand is a math/rand instance backed by crypto/rand CSPRNG.
-	Rand = rand.New(csRandSourceInstance)
+	Rand = rand.New(csRandSourceInstance) //nolint:gosec
 )
 
 type csRandSource struct {
@@ -63,7 +63,7 @@ func (r csRandSource) Int63() int64 {
 	return int64(val)
 }
 
-func (r csRandSource) Seed(seed int64) {
+func (r csRandSource) Seed(_ int64) {
 	// No-op.
 }
 

@@ -42,7 +42,9 @@ import (
 	"net"
 	"time"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+	"golang.org/x/crypto/hkdf"
+
 	"gitlab.com/yawning/obfs4.git/common/csrand"
 	"gitlab.com/yawning/obfs4.git/common/drbg"
 	"gitlab.com/yawning/obfs4.git/common/probdist"
@@ -87,8 +89,11 @@ type ssClientArgs struct {
 	sessionKey *uniformdh.PrivateKey
 }
 
-func newClientArgs(args *pt.Args) (ca *ssClientArgs, err error) {
-	ca = &ssClientArgs{}
+func newClientArgs(args *pt.Args) (*ssClientArgs, error) {
+	var (
+		ca  ssClientArgs
+		err error
+	)
 	if ca.kB, err = parsePasswordArg(args); err != nil {
 		return nil, err
 	}
@@ -99,7 +104,7 @@ func newClientArgs(args *pt.Args) (ca *ssClientArgs, err error) {
 	if ca.sessionKey, err = uniformdh.GenerateKey(csrand.Reader); err != nil {
 		return nil, err
 	}
-	return
+	return &ca, nil
 }
 
 func parsePasswordArg(args *pt.Args) (*ssSharedSecret, error) {
@@ -112,7 +117,7 @@ func parsePasswordArg(args *pt.Args) (*ssSharedSecret, error) {
 	// shared secret (k_B) used for handshaking.
 	decoded, err := base32.StdEncoding.DecodeString(str)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode password: %s", err)
+		return nil, fmt.Errorf("failed to decode password: %w", err)
 	}
 	if len(decoded) != sharedSecretLength {
 		return nil, fmt.Errorf("password length %d is invalid", len(decoded))
@@ -131,7 +136,7 @@ func newCryptoState(aesKey []byte, ivPrefix []byte, macKey []byte) (*ssCryptoSta
 	// The ScrambleSuit CTR-AES256 link crypto uses an 8 byte prefix from the
 	// KDF, and a 64 bit counter initialized to 1 as the IV.  The initial value
 	// of the counter isn't documented in the spec either.
-	var initialCtr = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}
+	initialCtr := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}
 	iv := make([]byte, 0, aes.BlockSize)
 	iv = append(iv, ivPrefix...)
 	iv = append(iv, initialCtr...)
@@ -168,7 +173,8 @@ type ssRxState struct {
 	payloadLen int
 }
 
-func (conn *ssConn) Read(b []byte) (n int, err error) {
+func (conn *ssConn) Read(b []byte) (int, error) {
+	var err error
 	// If the receive payload buffer is empty, consume data off the network.
 	for conn.receiveDecodedBuffer.Len() == 0 {
 		if err = conn.readPackets(); err != nil {
@@ -177,17 +183,19 @@ func (conn *ssConn) Read(b []byte) (n int, err error) {
 	}
 
 	// Service the read request using buffered payload.
+	var n int
 	if conn.receiveDecodedBuffer.Len() > 0 {
 		n, _ = conn.receiveDecodedBuffer.Read(b)
 	}
-	return
+	return n, err
 }
 
-func (conn *ssConn) Write(b []byte) (n int, err error) {
+func (conn *ssConn) Write(b []byte) (int, error) {
 	var frameBuf bytes.Buffer
 	p := b
 	toSend := len(p)
 
+	var n int
 	for toSend > 0 {
 		// Send as much payload as will fit into each frame as possible.
 		wrLen := len(p)
@@ -195,7 +203,7 @@ func (conn *ssConn) Write(b []byte) (n int, err error) {
 			wrLen = maxPayloadLength
 		}
 		payload := p[:wrLen]
-		if err = conn.makePacket(&frameBuf, pktPayload, payload, 0); err != nil {
+		if err := conn.makePayloadPacket(&frameBuf, payload, 0); err != nil {
 			return 0, err
 		}
 
@@ -205,28 +213,28 @@ func (conn *ssConn) Write(b []byte) (n int, err error) {
 	}
 
 	// Pad out the burst as appropriate.
-	if err = conn.padBurst(&frameBuf, conn.lenDist.Sample()); err != nil {
+	if err := conn.padBurst(&frameBuf, conn.lenDist.Sample()); err != nil {
 		return 0, err
 	}
 
 	// Write and return.
-	_, err = conn.Conn.Write(frameBuf.Bytes())
-	return
+	_, err := conn.Conn.Write(frameBuf.Bytes())
+	return n, err
 }
 
-func (conn *ssConn) SetDeadline(t time.Time) error {
+func (conn *ssConn) SetDeadline(_ time.Time) error {
 	return ErrNotSupported
 }
 
-func (conn *ssConn) SetReadDeadline(t time.Time) error {
+func (conn *ssConn) SetReadDeadline(_ time.Time) error {
 	return ErrNotSupported
 }
 
-func (conn *ssConn) SetWriteDeadline(t time.Time) error {
+func (conn *ssConn) SetWriteDeadline(_ time.Time) error {
 	return ErrNotSupported
 }
 
-func (conn *ssConn) makePacket(w io.Writer, pktType byte, data []byte, padLen int) error {
+func (conn *ssConn) makePayloadPacket(w io.Writer, data []byte, padLen int) error {
 	payloadLen := len(data)
 	totalLen := payloadLen + padLen
 	if totalLen > maxPayloadLength {
@@ -238,7 +246,7 @@ func (conn *ssConn) makePacket(w io.Writer, pktType byte, data []byte, padLen in
 	pkt := make([]byte, pktHdrLength, pktHdrLength+payloadLen+padLen)
 	binary.BigEndian.PutUint16(pkt[0:], uint16(totalLen))
 	binary.BigEndian.PutUint16(pkt[2:], uint16(payloadLen))
-	pkt[4] = pktType
+	pkt[4] = pktPayload
 	pkt = append(pkt, data...)
 	pkt = append(pkt, zeroPadBytes[:padLen]...)
 
@@ -319,7 +327,7 @@ func (conn *ssConn) readPackets() error {
 		// Authenticate the packet, by comparing the received MAC with the one
 		// calculated over the ciphertext consumed off the network.
 		cmpMAC := conn.rxCrypto.mac.Sum(nil)[:macLength]
-		if !hmac.Equal(cmpMAC, conn.receiveState.mac[:]) {
+		if !hmac.Equal(cmpMAC, conn.receiveState.mac) {
 			return ErrInvalidPacket
 		}
 
@@ -426,7 +434,7 @@ handshakeUDH:
 		// Attempt to process all the data seen so far as a response.
 		var seed []byte
 		n, seed, err = hs.parseServerHandshake(conn.receiveBuffer.Bytes())
-		if err == errMarkNotFoundYet {
+		if errors.Is(err, errMarkNotFoundYet) {
 			// No response found yet, keep trying.
 			continue
 		} else if err != nil {
@@ -444,7 +452,12 @@ handshakeUDH:
 func (conn *ssConn) initCrypto(seed []byte) error {
 	// Use HKDF-SHA256 (Expand only, no Extract) to generate session keys from
 	// initial keying material.
-	okm := hkdfExpand(sha256.New, seed, nil, kdfSecretLength)
+	rd := hkdf.Expand(sha256.New, seed, nil)
+	okm := make([]byte, kdfSecretLength)
+	if _, err := io.ReadFull(rd, okm); err != nil {
+		return err
+	}
+
 	var err error
 	conn.txCrypto, err = newCryptoState(okm[0:32], okm[32:40], okm[80:112])
 	if err != nil {
@@ -463,7 +476,7 @@ func (conn *ssConn) padBurst(burst *bytes.Buffer, sampleLen int) error {
 	// the ScrambleSuit MTU) is sampleLen bytes.
 
 	dataLen := burst.Len() % maxSegmentLength
-	padLen := 0
+	var padLen int
 	if sampleLen >= dataLen {
 		padLen = sampleLen - dataLen
 	} else {
@@ -481,12 +494,12 @@ func (conn *ssConn) padBurst(burst *bytes.Buffer, sampleLen int) error {
 	if padLen > maxSegmentLength {
 		// Note: packetmorpher.py: getPadding is slightly wrong and only
 		// accounts for one of the two packet headers.
-		if err := conn.makePacket(burst, pktPayload, nil, 700-pktOverhead); err != nil {
+		if err := conn.makePayloadPacket(burst, nil, 700-pktOverhead); err != nil {
 			return err
 		}
-		return conn.makePacket(burst, pktPayload, nil, padLen-(700+2*pktOverhead))
+		return conn.makePayloadPacket(burst, nil, padLen-(700+2*pktOverhead))
 	}
-	return conn.makePacket(burst, pktPayload, nil, padLen-pktOverhead)
+	return conn.makePayloadPacket(burst, nil, padLen-pktOverhead)
 }
 
 func newScrambleSuitClientConn(conn net.Conn, tStore *ssTicketStore, ca *ssClientArgs) (net.Conn, error) {

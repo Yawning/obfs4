@@ -32,17 +32,18 @@ package obfs4 // import "gitlab.com/yawning/obfs4.git/transports/obfs4"
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"strconv"
 	"syscall"
 	"time"
 
-	"git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
+
 	"gitlab.com/yawning/obfs4.git/common/drbg"
 	"gitlab.com/yawning/obfs4.git/common/ntor"
 	"gitlab.com/yawning/obfs4.git/common/probdist"
@@ -81,7 +82,7 @@ const (
 
 // biasedDist controls if the probability table will be ScrambleSuit style or
 // uniformly distributed.
-var biasedDist bool
+var biasedDist = flag.Bool(biasCmdArg, false, "Enable obfs4 using ScrambleSuit style table generation")
 
 type obfs4ClientArgs struct {
 	nodeID     *ntor.NodeID
@@ -99,7 +100,7 @@ func (t *Transport) Name() string {
 }
 
 // ClientFactory returns a new obfs4ClientFactory instance.
-func (t *Transport) ClientFactory(stateDir string) (base.ClientFactory, error) {
+func (t *Transport) ClientFactory(_ string) (base.ClientFactory, error) {
 	cf := &obfs4ClientFactory{transport: t}
 	return cf, nil
 }
@@ -137,7 +138,7 @@ func (t *Transport) ServerFactory(stateDir string, args *pt.Args) (base.ServerFa
 	if err != nil {
 		return nil, err
 	}
-	rng := rand.New(drbg)
+	rng := rand.New(drbg) //nolint:gosec
 
 	sf := &obfs4ServerFactory{t, &ptArgs, st.nodeID, st.identityKey, st.drbgSeed, iatSeed, st.iatMode, filter, rng.Intn(maxCloseDelay)}
 	return sf, nil
@@ -151,14 +152,14 @@ func (cf *obfs4ClientFactory) Transport() base.Transport {
 	return cf.transport
 }
 
-func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
+func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (any, error) {
 	var nodeID *ntor.NodeID
 	var publicKey *ntor.PublicKey
 
 	// The "new" (version >= 0.0.3) bridge lines use a unified "cert" argument
 	// for the Node ID and Public Key.
 	certStr, ok := args.Get(certArg)
-	if ok {
+	if ok { //nolint:nestif
 		cert, err := serverCertFromString(certStr)
 		if err != nil {
 			return nil, err
@@ -195,7 +196,7 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 		return nil, fmt.Errorf("invalid iat-mode '%d'", iatMode)
 	}
 
-	// Generate the session key pair before connectiong to hide the Elligator2
+	// Generate the session key pair before connecting to hide the Elligator2
 	// rejection sampling from network observers.
 	sessionKey, err := ntor.NewKeypair(true)
 	if err != nil {
@@ -205,7 +206,7 @@ func (cf *obfs4ClientFactory) ParseArgs(args *pt.Args) (interface{}, error) {
 	return &obfs4ClientArgs{nodeID, publicKey, sessionKey, iatMode}, nil
 }
 
-func (cf *obfs4ClientFactory) Dial(network, addr string, dialFn base.DialFunc, args interface{}) (net.Conn, error) {
+func (cf *obfs4ClientFactory) Dial(network, addr string, dialFn base.DialFunc, args any) (net.Conn, error) {
 	// Validate args before bothering to open connection.
 	ca, ok := args.(*obfs4ClientArgs)
 	if !ok {
@@ -259,10 +260,10 @@ func (sf *obfs4ServerFactory) WrapConn(conn net.Conn) (net.Conn, error) {
 		return nil, err
 	}
 
-	lenDist := probdist.New(sf.lenSeed, 0, framing.MaximumSegmentLength, biasedDist)
+	lenDist := probdist.New(sf.lenSeed, 0, framing.MaximumSegmentLength, *biasedDist)
 	var iatDist *probdist.WeightedDist
 	if sf.iatSeed != nil {
-		iatDist = probdist.New(sf.iatSeed, 0, maxIATDelay, biasedDist)
+		iatDist = probdist.New(sf.iatSeed, 0, maxIATDelay, *biasedDist)
 	}
 
 	c := &obfs4Conn{conn, true, lenDist, iatDist, sf.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), make([]byte, consumeReadSize), nil, nil}
@@ -294,25 +295,28 @@ type obfs4Conn struct {
 	decoder *framing.Decoder
 }
 
-func newObfs4ClientConn(conn net.Conn, args *obfs4ClientArgs) (c *obfs4Conn, err error) {
+func newObfs4ClientConn(conn net.Conn, args *obfs4ClientArgs) (*obfs4Conn, error) {
 	// Generate the initial protocol polymorphism distribution(s).
-	var seed *drbg.Seed
+	var (
+		seed *drbg.Seed
+		err  error
+	)
 	if seed, err = drbg.NewSeed(); err != nil {
-		return
+		return nil, err
 	}
-	lenDist := probdist.New(seed, 0, framing.MaximumSegmentLength, biasedDist)
+	lenDist := probdist.New(seed, 0, framing.MaximumSegmentLength, *biasedDist)
 	var iatDist *probdist.WeightedDist
 	if args.iatMode != iatNone {
 		var iatSeed *drbg.Seed
 		iatSeedSrc := sha256.Sum256(seed.Bytes()[:])
 		if iatSeed, err = drbg.SeedFromBytes(iatSeedSrc[:]); err != nil {
-			return
+			return nil, err
 		}
-		iatDist = probdist.New(iatSeed, 0, maxIATDelay, biasedDist)
+		iatDist = probdist.New(iatSeed, 0, maxIATDelay, *biasedDist)
 	}
 
 	// Allocate the client structure.
-	c = &obfs4Conn{conn, false, lenDist, iatDist, args.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), make([]byte, consumeReadSize), nil, nil}
+	c := &obfs4Conn{conn, false, lenDist, iatDist, args.iatMode, bytes.NewBuffer(nil), bytes.NewBuffer(nil), make([]byte, consumeReadSize), nil, nil}
 
 	// Start the handshake timeout.
 	deadline := time.Now().Add(clientHandshakeTimeout)
@@ -329,7 +333,7 @@ func newObfs4ClientConn(conn net.Conn, args *obfs4ClientArgs) (c *obfs4Conn, err
 		return nil, err
 	}
 
-	return
+	return c, nil
 }
 
 func (conn *obfs4Conn) clientHandshake(nodeID *ntor.NodeID, peerIdentityKey *ntor.PublicKey, sessionKey *ntor.Keypair) error {
@@ -359,14 +363,14 @@ func (conn *obfs4Conn) clientHandshake(nodeID *ntor.NodeID, peerIdentityKey *nto
 		conn.receiveBuffer.Write(hsBuf[:n])
 
 		n, seed, err := hs.parseServerHandshake(conn.receiveBuffer.Bytes())
-		if err == ErrMarkNotFoundYet {
+		if errors.Is(err, ErrMarkNotFoundYet) {
 			continue
 		} else if err != nil {
 			return err
 		}
 		_ = conn.receiveBuffer.Next(n)
 
-		// Use the derived key material to intialize the link crypto.
+		// Use the derived key material to initialize the link crypto.
 		okm := ntor.Kdf(seed, framing.KeyLength*2)
 		conn.encoder = framing.NewEncoder(okm[:framing.KeyLength])
 		conn.decoder = framing.NewDecoder(okm[framing.KeyLength:])
@@ -398,7 +402,7 @@ func (conn *obfs4Conn) serverHandshake(sf *obfs4ServerFactory, sessionKey *ntor.
 		conn.receiveBuffer.Write(hsBuf[:n])
 
 		seed, err := hs.parseClientHandshake(sf.replayFilter, conn.receiveBuffer.Bytes())
-		if err == ErrMarkNotFoundYet {
+		if errors.Is(err, ErrMarkNotFoundYet) {
 			continue
 		} else if err != nil {
 			return err
@@ -406,10 +410,10 @@ func (conn *obfs4Conn) serverHandshake(sf *obfs4ServerFactory, sessionKey *ntor.
 		conn.receiveBuffer.Reset()
 
 		if err := conn.Conn.SetDeadline(time.Time{}); err != nil {
-			return nil
+			return err
 		}
 
-		// Use the derived key material to intialize the link crypto.
+		// Use the derived key material to initialize the link crypto.
 		okm := ntor.Kdf(seed, framing.KeyLength*2)
 		conn.encoder = framing.NewEncoder(okm[framing.KeyLength:])
 		conn.decoder = framing.NewDecoder(okm[:framing.KeyLength])
@@ -421,7 +425,7 @@ func (conn *obfs4Conn) serverHandshake(sf *obfs4ServerFactory, sessionKey *ntor.
 	// the length obfuscation, this makes the amount of data received from the
 	// server inconsistent with the length sent from the client.
 	//
-	// Rebalance this by tweaking the client mimimum padding/server maximum
+	// Rebalance this by tweaking the client minimum padding/server maximum
 	// padding, and sending the PRNG seed unpadded (As in, treat the PRNG seed
 	// as part of the server response).  See inlineSeedFrameLength in
 	// handshake_ntor.go.
@@ -447,13 +451,14 @@ func (conn *obfs4Conn) serverHandshake(sf *obfs4ServerFactory, sessionKey *ntor.
 	return nil
 }
 
-func (conn *obfs4Conn) Read(b []byte) (n int, err error) {
+func (conn *obfs4Conn) Read(b []byte) (int, error) {
 	// If there is no payload from the previous Read() calls, consume data off
 	// the network.  Not all data received is guaranteed to be usable payload,
 	// so do this in a loop till data is present or an error occurs.
+	var err error
 	for conn.receiveDecodedBuffer.Len() == 0 {
 		err = conn.readPackets()
-		if err == framing.ErrAgain {
+		if errors.Is(err, framing.ErrAgain) {
 			// Don't proagate this back up the call stack if we happen to break
 			// out of the loop.
 			err = nil
@@ -465,6 +470,7 @@ func (conn *obfs4Conn) Read(b []byte) (n int, err error) {
 
 	// Even if err is set, attempt to do the read anyway so that all decoded
 	// data gets relayed before the connection is torn down.
+	var n int
 	if conn.receiveDecodedBuffer.Len() > 0 {
 		var berr error
 		n, berr = conn.receiveDecodedBuffer.Read(b)
@@ -475,28 +481,29 @@ func (conn *obfs4Conn) Read(b []byte) (n int, err error) {
 		}
 	}
 
-	return
+	return n, err
 }
 
-func (conn *obfs4Conn) Write(b []byte) (n int, err error) {
+func (conn *obfs4Conn) Write(b []byte) (int, error) {
 	chopBuf := bytes.NewBuffer(b)
-	var payload [maxPacketPayloadLength]byte
-	var frameBuf bytes.Buffer
+	var (
+		payload  [maxPacketPayloadLength]byte
+		frameBuf bytes.Buffer
+		n        int
+	)
 
 	// Chop the pending data into payload frames.
 	for chopBuf.Len() > 0 {
 		// Send maximum sized frames.
-		rdLen := 0
-		rdLen, err = chopBuf.Read(payload[:])
+		rdLen, err := chopBuf.Read(payload[:])
 		if err != nil {
 			return 0, err
 		} else if rdLen == 0 {
-			panic(fmt.Sprintf("BUG: Write(), chopping length was 0"))
+			panic("BUG: Write(), chopping length was 0")
 		}
 		n += rdLen
 
-		err = conn.makePacket(&frameBuf, packetTypePayload, payload[:rdLen], 0)
-		if err != nil {
+		if err = conn.makePacket(&frameBuf, packetTypePayload, payload[:rdLen], 0); err != nil {
 			return 0, err
 		}
 	}
@@ -504,7 +511,7 @@ func (conn *obfs4Conn) Write(b []byte) (n int, err error) {
 	if conn.iatMode != iatParanoid {
 		// For non-paranoid IAT, pad once per burst.  Paranoid IAT handles
 		// things differently.
-		if err = conn.padBurst(&frameBuf, conn.lenDist.Sample()); err != nil {
+		if err := conn.padBurst(&frameBuf, conn.lenDist.Sample()); err != nil {
 			return 0, err
 		}
 	}
@@ -513,10 +520,11 @@ func (conn *obfs4Conn) Write(b []byte) (n int, err error) {
 	// because the frame encoder state is advanced, and the code doesn't keep
 	// frameBuf around.  In theory, write timeouts and whatnot could be
 	// supported if this wasn't the case, but that complicates the code.
-	if conn.iatMode != iatNone {
+	var err error
+	if conn.iatMode != iatNone { //nolint:nestif
 		var iatFrame [framing.MaximumSegmentLength]byte
 		for frameBuf.Len() > 0 {
-			iatWrLen := 0
+			var iatWrLen int
 
 			switch conn.iatMode {
 			case iatEnabled:
@@ -549,7 +557,7 @@ func (conn *obfs4Conn) Write(b []byte) (n int, err error) {
 			if err != nil {
 				return 0, err
 			} else if iatWrLen == 0 {
-				panic(fmt.Sprintf("BUG: Write(), iat length was 0"))
+				panic("BUG: Write(), iat length was 0")
 			}
 
 			// Calculate the delay.  The delay resolution is 100 usec, leading
@@ -557,8 +565,7 @@ func (conn *obfs4Conn) Write(b []byte) (n int, err error) {
 			iatDelta := time.Duration(conn.iatDist.Sample() * 100)
 
 			// Write then sleep.
-			_, err = conn.Conn.Write(iatFrame[:iatWrLen])
-			if err != nil {
+			if _, err = conn.Conn.Write(iatFrame[:iatWrLen]); err != nil {
 				return 0, err
 			}
 			time.Sleep(iatDelta * time.Microsecond)
@@ -567,14 +574,14 @@ func (conn *obfs4Conn) Write(b []byte) (n int, err error) {
 		_, err = conn.Conn.Write(frameBuf.Bytes())
 	}
 
-	return
+	return n, err
 }
 
-func (conn *obfs4Conn) SetDeadline(t time.Time) error {
+func (conn *obfs4Conn) SetDeadline(_ time.Time) error {
 	return syscall.ENOTSUP
 }
 
-func (conn *obfs4Conn) SetWriteDeadline(t time.Time) error {
+func (conn *obfs4Conn) SetWriteDeadline(_ time.Time) error {
 	return syscall.ENOTSUP
 }
 
@@ -594,13 +601,13 @@ func (conn *obfs4Conn) closeAfterDelay(sf *obfs4ServerFactory, startTime time.Ti
 
 	// Consume and discard data on this connection until the specified interval
 	// passes.
-	_, _ = io.Copy(ioutil.Discard, conn.Conn)
+	_, _ = io.Copy(io.Discard, conn.Conn)
 }
 
-func (conn *obfs4Conn) padBurst(burst *bytes.Buffer, toPadTo int) (err error) {
+func (conn *obfs4Conn) padBurst(burst *bytes.Buffer, toPadTo int) error {
 	tailLen := burst.Len() % framing.MaximumSegmentLength
 
-	padLen := 0
+	var padLen int
 	if toPadTo >= tailLen {
 		padLen = toPadTo - tailLen
 	} else {
@@ -608,32 +615,24 @@ func (conn *obfs4Conn) padBurst(burst *bytes.Buffer, toPadTo int) (err error) {
 	}
 
 	if padLen > headerLength {
-		err = conn.makePacket(burst, packetTypePayload, []byte{},
-			uint16(padLen-headerLength))
-		if err != nil {
-			return
+		if err := conn.makePacket(burst, packetTypePayload, []byte{}, uint16(padLen-headerLength)); err != nil {
+			return err
 		}
 	} else if padLen > 0 {
-		err = conn.makePacket(burst, packetTypePayload, []byte{},
-			maxPacketPayloadLength)
-		if err != nil {
-			return
+		if err := conn.makePacket(burst, packetTypePayload, []byte{}, maxPacketPayloadLength); err != nil {
+			return err
 		}
-		err = conn.makePacket(burst, packetTypePayload, []byte{},
-			uint16(padLen))
-		if err != nil {
-			return
+		if err := conn.makePacket(burst, packetTypePayload, []byte{}, uint16(padLen)); err != nil {
+			return err
 		}
 	}
 
-	return
+	return nil
 }
 
-func init() {
-	flag.BoolVar(&biasedDist, biasCmdArg, false, "Enable obfs4 using ScrambleSuit style table generation")
-}
-
-var _ base.ClientFactory = (*obfs4ClientFactory)(nil)
-var _ base.ServerFactory = (*obfs4ServerFactory)(nil)
-var _ base.Transport = (*Transport)(nil)
-var _ net.Conn = (*obfs4Conn)(nil)
+var (
+	_ base.ClientFactory = (*obfs4ClientFactory)(nil)
+	_ base.ServerFactory = (*obfs4ServerFactory)(nil)
+	_ base.Transport     = (*Transport)(nil)
+	_ net.Conn           = (*obfs4Conn)(nil)
+)

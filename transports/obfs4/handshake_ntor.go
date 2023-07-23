@@ -280,7 +280,7 @@ func (hs *serverHandshake) parseClientHandshake(filter *replayfilter.ReplayFilte
 	macFound := false
 	for _, off := range []int64{0, -1, 1} {
 		// Allow epoch to be off by up to a hour in either direction.
-		epochHour := []byte(strconv.FormatInt(getEpochHour()+int64(off), 10))
+		epochHour := []byte(strconv.FormatInt(getEpochHour()+off, 10))
 		hs.mac.Reset()
 		_, _ = hs.mac.Write(resp[:pos+markLength])
 		_, _ = hs.mac.Write(epochHour)
@@ -367,7 +367,7 @@ func getEpochHour() int64 {
 	return time.Now().Unix() / 3600
 }
 
-func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int) {
+func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) int {
 	if len(mark) != markLength {
 		panic(fmt.Sprintf("BUG: Invalid mark length: %d", len(mark)))
 	}
@@ -387,19 +387,19 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 		// The server can optimize the search process by only examining the
 		// tail of the buffer.  The client can't send valid data past M_C |
 		// MAC_C as it does not have the server's public key yet.
-		pos = endPos - (markLength + macLength)
+		pos := endPos - (markLength + macLength)
 		if !hmac.Equal(buf[pos:pos+markLength], mark) {
 			return -1
 		}
 
-		return
+		return pos
 	}
 
 	// The client has to actually do a substring search since the server can
 	// and will send payload trailing the response.
 	//
 	// XXX: bytes.Index() uses a naive search, which kind of sucks.
-	pos = bytes.Index(buf[startPos:endPos], mark)
+	pos := bytes.Index(buf[startPos:endPos], mark)
 	if pos == -1 {
 		return -1
 	}
@@ -411,7 +411,7 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 
 	// Return the index relative to the start of the slice.
 	pos += startPos
-	return
+	return pos
 }
 
 func makePad(padLen int) ([]byte, error) {
