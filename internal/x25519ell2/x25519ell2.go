@@ -22,7 +22,7 @@ import (
 
 	"filippo.io/edwards25519"
 	"filippo.io/edwards25519/field"
-	"gitlab.com/yawning/edwards25519-extra.git/elligator2"
+	"gitlab.com/yawning/edwards25519-extra/elligator2"
 )
 
 // The corrected version of this that solves the implementation errors
