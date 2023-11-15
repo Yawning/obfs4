@@ -1,4 +1,4 @@
-## obfs4 - The obfourscator
+## obfs4 - The obfuscator
 #### Yawning Angel (yawning at schwanenlied dot me)
 
 ### What?
